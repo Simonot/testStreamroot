@@ -4,10 +4,9 @@
 		<title>WebRTC messaging chat</title>
 		<style type="text/css">
    			.contenair {
-   				background-color: inherit;
    				float: left;
   				height: 400px;
-  				width: 200px;
+  				width: 220px;
   				border-style: solid;
   				border-width: medium;
   				padding: 5px;
@@ -20,12 +19,15 @@
    				margin: 2px;
    				padding: 2px;
    			}
+   			.textError {
+   				color: red;
+   			}
   		</style>
 	</head>
 
 	<body>
 		<div id="nameDiv">
-			Please start by entering your name : <input type="text" id="nameClient" style="background-color: inherit"></input><span id="nameClientError" hidden>this name is already chosen, pick another one please :)<span>
+			Please start by entering your name : <input type="text" id="nameClient"></input><span id="nameClientError" class="textError" hidden> this name is already chosen, pick another one please :)<span>
 		</div>
 		<div id="contenairsDiv" hidden>
 			<div id="clientConnected" class="contenair" >
@@ -39,13 +41,16 @@
 				Name</br>
 			</div>
 			<div id="messageContenair" class="contenair">
-				Send message to : <input type="text" id="nameToSend" disabled style="background-color: inherit"></input></br>
-				<button id="startSendSession" disabled style="background-color: inherit">Start Sending</button></br> 
-				<textarea id="messageToSend" disabled style="background-color: inherit"></textarea></br>
-    			<button id="sendButton" disabled style="background-color: inherit">Send</button>
+				Send message to : <input type="text" id="nameToSend" disabled></input></br>
+				<span id="nameToSendError1" class="textError" hidden> Please chose a name (diferent than yours :))</br></span>
+				<span id="nameToSendError2" class="textError" hidden> Please chose a name wich is connected (try use "search name" :))</br></span>
+				<button id="startSendSession" disabled>Start Sending</button></br> 
+				<textarea id="messageToSend" disabled></textarea></br>
+    			<button id="sendButton" disabled>Send</button>
   				</br></br>
-				Last message : (received from <span id="messsageReceivedFrom"></span>)</br>
-				<textarea id="messageReceived" disabled style="background-color: inherit"></textarea>
+				Last message :</br>
+				(received from   <span id="messsageReceivedFrom">...</span>)</br>
+				<textarea id="messageReceived" disabled></textarea>
   			</div>
   		</div>
 

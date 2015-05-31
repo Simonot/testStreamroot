@@ -12,6 +12,7 @@ var app = http.createServer(function (req, res) {
 
 //socket.io functions
 var nameClientSockets = {};
+var nameList = [];
 
 var io = require('socket.io').listen(app);
 io.sockets.on('connection', function (socket){
@@ -27,7 +28,12 @@ io.sockets.on('connection', function (socket){
 	socket.on('new client connected', function(name) {
 		log_comment(name);
 		nameClientSockets[name] = socket;
+		nameList.push(name);
 		socket.broadcast.emit('new client connected', name);
+	});
+
+	socket.on('want name list', function() {
+		socket.emit('name list', nameList);
 	});
 
 	socket.on('message', function (message) {

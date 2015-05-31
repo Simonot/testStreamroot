@@ -5,11 +5,25 @@ var receiveChannel = null;
 var name = null;
 var nameSender;
 var nameToSend;
+var nameList = [];
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
 
 //////////////////////////////////////
+Array.prototype.inArray = function (value) {
+ // Returns true if the passed value is found in the
+ // array. Returns false if it is not.
+ 	var i;
+ 	for (i=0; i < this.length; i++) {
+ 		if (this[i] == value)
+ 			return true;
+ 	}
+ 	return false;
+};
+
+
+var socket = io.connect();
 trace('new client connected');
 
 var nameClient = document.getElementById("nameClient");
@@ -17,25 +31,33 @@ nameClient.disabled = false;
 nameClient.value= "";
 nameClient.onchange = nameClientAdd;
 
+socket.emit('want name list');
+socket.on('name list', function(nameListReceived) {
+	nameList = nameListReceived;
+	nameList.forEach(function(name, index) {
+  		trace(name);
+	});
+});
 
 function nameClientAdd() {
 	name = nameClient.value;
-	//if (searchName(name)) {
-	//	nameClient.value = "";
-	//	document.getElementById("nameClientError").hidden = false;
-	//} else {
+	if (nameList.inArray(name)) {
+		nameClient.value = "";
+		document.getElementById("nameClientError").hidden = false;
+	} else {
 		document.getElementById("nameClientError").hidden = true;
 		document.getElementById("contenairsDiv").hidden = false;
 		startSendSession.disabled = false;
 		nameClient.disabled = true;
 		nameToSendInput.disabled = false;
 		socket.emit('new client connected', name);
+	}
 }
 //////////////////////////////////////
-var socket = io.connect();
 
 socket.on('new client connected', function(name) {
 	trace('new client connected, named ' + name);
+	nameList.push(name);
 });
 
 socket.on('log', function (array){
@@ -104,6 +126,18 @@ sendButton.onclick = sendData;
 
 function startSendingSession() {
 	nameToSend = nameToSendInput.value;
+	if (nameToSend == "" || nameToSend == name) {
+		document.getElementById("nameToSendError2").hidden = true;
+		document.getElementById("nameToSendError1").hidden = false;
+		return;
+	}
+	if (!nameList.inArray(nameToSend)) {
+		document.getElementById("nameToSendError1").hidden = true;
+		document.getElementById("nameToSendError2").hidden = false;
+		return;
+	}
+	document.getElementById("nameToSendError1").hidden = true;
+	document.getElementById("nameToSendError2").hidden = true;
 	trace("starting sending session")
 	if (pcSend != null) {
 		sendChannel.close();
@@ -196,6 +230,7 @@ function setLocalAndSendMessage_Receive(sessionDescription) {
 
 function handleMessage(event) {
   trace('Received message: ' + event.data);
+  document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
   document.getElementById("messageReceived").value = event.data;
 }
 
