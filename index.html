@@ -22,6 +22,9 @@
    			.textError {
    				color: red;
    			}
+   			.textSuccess {
+   				color: green;
+   			}
   		</style>
 	</head>
 
@@ -29,19 +32,23 @@
 		<div id="nameDiv">
 			Please start by entering your name : <input type="text" id="nameClient"></input><span id="nameClientError" class="textError" hidden> this name is already chosen, pick another one please :)<span>
 		</div>
+		<div id="bannedDiv" class="textError" hidden> YOU HAVE BEEN BANNED
+		</div>
 		<div id="contenairsDiv" hidden>
 			<div id="clientConnected" class="contenair" >
-				Client currently connected are :</br>
-				Name</br>
-				Name</br>
-				Name</br>
-				Name</br>
-				Name</br>
-				Name</br>
-				Name</br>
+				Search if a client is connected :</br>
+				<input type="text" id="nameSearched"></input></br>
+				<span id="nameSearchedYes" class="textSuccess" hidden> The name searched is connected :)</br></span>
+				<span id="nameSearchedNo" class="textError" hidden> The name searched is not connected ...</br></span>
+				<span id="nameSearchedError" class="textError" hidden> Please chose a name to search :)</br></span>
+				Ban a client :</br>
+				<input type="text" id="nameBanned"></input></br>
+				<span id="nameBannedYes" class="textSuccess" hidden> The name banned is now disconnected :)</br></span>
+				<span id="nameBannedNo" class="textError" hidden> this name banned is not currently connected ... you can't ban it :)</br></span>
+				<span id="nameBannedError" class="textError" hidden> Please chose a name to ban :)</br></span>
 			</div>
 			<div id="messageContenair" class="contenair">
-				Send message to : <input type="text" id="nameToSend" disabled></input></br>
+				Send message to : <input type="text" id="nameToSend"></input></br>
 				<span id="nameToSendError1" class="textError" hidden> Please chose a name (diferent than yours :))</br></span>
 				<span id="nameToSendError2" class="textError" hidden> Please chose a name wich is connected (try use "search name" :))</br></span>
 				<button id="startSendSession" disabled>Start Sending</button></br> 

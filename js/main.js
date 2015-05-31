@@ -34,6 +34,7 @@ nameClient.onchange = nameClientAdd;
 socket.emit('want name list');
 socket.on('name list', function(nameListReceived) {
 	nameList = nameListReceived;
+	trace("nameList :");
 	nameList.forEach(function(name, index) {
   		trace(name);
 	});
@@ -50,14 +51,89 @@ function nameClientAdd() {
 		startSendSession.disabled = false;
 		nameClient.disabled = true;
 		nameToSendInput.disabled = false;
+		nameList.push(name);
 		socket.emit('new client connected', name);
 	}
 }
 //////////////////////////////////////
+var nameSerachedInput = document.getElementById("nameSearched");
+var nameBannedInput = document.getElementById("nameBanned");
+nameSerachedInput.value = "";
+nameBannedInput.value = "";
+nameSerachedInput.onchange = searchName;
+nameBannedInput.onchange = banName;
 
+function searchName() {
+	var nameSearched = nameSerachedInput.value;
+	var test=nameList.inArray(nameSearched);
+	trace(nameSearched);
+	trace(test);
+	if (nameSearched == "") {
+		document.getElementById("nameSearchedYes").hidden = true;
+		document.getElementById("nameSearchedNo").hidden = true;
+		document.getElementById("nameSearchedError").hidden = false;
+	} else if(test) {
+		document.getElementById("nameSearchedNo").hidden = true;
+		document.getElementById("nameSearchedError").hidden = true;
+		document.getElementById("nameSearchedYes").hidden = false;
+	} else {
+		document.getElementById("nameSearchedYes").hidden = true;
+		document.getElementById("nameSearchedError").hidden = true;
+		document.getElementById("nameSearchedNo").hidden = false;
+	}
+}
+
+function banName() {
+	var nameBanned = nameBannedInput.value;
+	var test=nameList.inArray(nameBanned);
+	trace(nameBanned);
+	trace(test);
+	if (nameBanned == "") {
+		document.getElementById("nameBannedYes").hidden = true;
+		document.getElementById("nameBannedNo").hidden = true;
+		document.getElementById("nameBannedError").hidden = false;
+	} else if(test) {
+		document.getElementById("nameBannedError").hidden = true;
+		document.getElementById("nameBannedNo").hidden = true;
+		document.getElementById("nameBannedYes").hidden = false;
+		trace(nameBanned);
+		socket.emit('banned client', nameBanned);
+		nameList = nameList.splice(nameList.indexOf(nameBanned), 1);
+		nameSerachedInput.value = "";
+		document.getElementById("nameSearchedYes").hidden = true;
+		document.getElementById("nameSearchedError").hidden = true;
+		document.getElementById("nameSearchedNo").hidden = true;
+	} else {
+		document.getElementById("nameBannedYes").hidden = true;
+		document.getElementById("nameBannedError").hidden = true;
+		document.getElementById("nameBannedNo").hidden = false;
+	}
+}
+
+socket.on('you have been banned', function() {
+	nameList = [];
+	if (pcReceive != null) {
+		receiveChannel.close()
+		receiveChannel = null;
+		pcReceive.close();
+		pcReceive = null;
+	}
+	if (pcSend != null) {
+		sendChannel.close();
+		pcSend.close();
+		pcSend = null;
+	}
+	document.getElementById("contenairsDiv").hidden = true;
+	document.getElementById("bannedDiv").hidden = false;
+});
+
+//////////////////////////////////////
 socket.on('new client connected', function(name) {
 	trace('new client connected, named ' + name);
 	nameList.push(name);
+	nameList.forEach(function(name, index) {
+  		trace(name);
+	});
 });
 
 socket.on('log', function (array){
@@ -117,7 +193,6 @@ var startSendSession = document.getElementById("startSendSession");
 var sendButton = document.getElementById("sendButton");
 var messageToSend = document.getElementById("messageToSend");
 messageToSend.value = "Press Start Sending, enter some text, then press Send.";
-nameToSendInput.disabled = true;
 nameToSendInput.value = "";
 messageToSend.disabled = true;
 sendButton.disabled = true;
@@ -218,7 +293,7 @@ function setLocalAndSendMessage_Send(sessionDescription) {
   	type: 'offer',
   	message: sessionDescription});
 }
-
+nameToSend
 function setLocalAndSendMessage_Receive(sessionDescription) {
   pcReceive.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);

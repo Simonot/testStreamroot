@@ -26,13 +26,22 @@ io.sockets.on('connection', function (socket){
 	}
 
 	socket.on('new client connected', function(name) {
-		log_comment(name);
+		log_comment('name added ' +name);
 		nameClientSockets[name] = socket;
 		nameList.push(name);
 		socket.broadcast.emit('new client connected', name);
 	});
 
 	socket.on('want name list', function() {
+		socket.emit('name list', nameList);
+	});
+
+	socket.on('banned client', function(nameBanned) {
+		log_comment('name banned ' + nameBanned);
+		nameClientSockets[nameBanned].emit('you have been banned');
+		nameClientSockets[nameBanned].disconnect();
+		nameList.splice(nameList.indexOf(nameBanned), 1);
+		socket.broadcast.emit('name list', nameList);
 		socket.emit('name list', nameList);
 	});
 
