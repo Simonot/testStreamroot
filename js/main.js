@@ -1,3 +1,7 @@
+/* Before starting reading the code make sure you have red README.md
+to understand the normal execution stack (https://github.com/Simonot/testStreamroot/)
+*/
+
 var pcSend = null;
 var pcReceive = null;
 var sendChannel = null
@@ -11,6 +15,7 @@ var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
 
 //////////////////////////////////////
+// only an utility function
 Array.prototype.inArray = function (value) {
  // Returns true if the passed value is found in the
  // array. Returns false if it is not.
@@ -22,15 +27,27 @@ Array.prototype.inArray = function (value) {
  	return false;
 };
 
+// two utility function for developpement 
+socket.on('log', function (array){
+  console.log.apply(console, array);
+});
 
+function trace(text) {
+  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
+}
+
+//////////////////////////////////////
 var socket = io.connect();
 trace('new client connected');
 
+/*First part : getting the user name. 
+If valide delete hidden attribute of contenairsDiv */
 var nameClient = document.getElementById("nameClient");
 nameClient.disabled = false;
 nameClient.value= "";
 nameClient.onchange = nameClientAdd;
 
+//getting the name list of the client already connected to be sure your name is valide
 socket.emit('want name list');
 socket.on('name list', function(nameListReceived) {
 	nameList = nameListReceived;
@@ -55,7 +72,17 @@ function nameClientAdd() {
 		socket.emit('new client connected', name);
 	}
 }
+
+socket.on('new client connected', function(name) {
+	trace('new client connected, named ' + name);
+	nameList.push(name);
+	nameList.forEach(function(name, index) {
+  		trace(name);
+	});
+});
+
 //////////////////////////////////////
+// clientConnected div, implementation of search and ban
 var nameSerachedInput = document.getElementById("nameSearched");
 var nameBannedInput = document.getElementById("nameBanned");
 nameSerachedInput.value = "";
@@ -66,8 +93,6 @@ nameBannedInput.onchange = banName;
 function searchName() {
 	var nameSearched = nameSerachedInput.value;
 	var test=nameList.inArray(nameSearched);
-	trace(nameSearched);
-	trace(test);
 	if (nameSearched == "") {
 		document.getElementById("nameSearchedYes").hidden = true;
 		document.getElementById("nameSearchedNo").hidden = true;
@@ -86,8 +111,6 @@ function searchName() {
 function banName() {
 	var nameBanned = nameBannedInput.value;
 	var test=nameList.inArray(nameBanned);
-	trace(nameBanned);
-	trace(test);
 	if (nameBanned == "") {
 		document.getElementById("nameBannedYes").hidden = true;
 		document.getElementById("nameBannedNo").hidden = true;
@@ -99,6 +122,7 @@ function banName() {
 		trace(nameBanned);
 		socket.emit('banned client', nameBanned);
 		nameList = nameList.splice(nameList.indexOf(nameBanned), 1);
+		//following part just in case the name had been searched just before banned
 		nameSerachedInput.value = "";
 		document.getElementById("nameSearchedYes").hidden = true;
 		document.getElementById("nameSearchedError").hidden = true;
@@ -128,30 +152,15 @@ socket.on('you have been banned', function() {
 });
 
 //////////////////////////////////////
-socket.on('new client connected', function(name) {
-	trace('new client connected, named ' + name);
-	nameList.push(name);
-	nameList.forEach(function(name, index) {
-  		trace(name);
-	});
-});
+// messageContenair div implementation, all the webRTC exanging messages and function
 
-socket.on('log', function (array){
-  console.log.apply(console, array);
-});
-
-function trace(text) {
-  console.log((performance.now() / 1000).toFixed(3) + ": " + text);
-}
-
+// utility function to follow exange of messaging with the server
 function sendMessage(message){
 	console.log('Client sending message: ', message);
-  // if (typeof message === 'object') {
-  //   message = JSON.stringify(message);
-  // }
-  socket.emit('message', message);
+  	socket.emit('message', message);
 }
 
+// again, be sure to have red README (II.B) to understand to normal stack exange of messages
 socket.on('message', function (message){
   console.log('Client received message:', message);
   if (message.message == 'want to send message') {
@@ -183,11 +192,11 @@ socket.on('message', function (message){
   }
 });
 
+// connection free STUN TURN Server google
 if (location.hostname != "localhost") {
   requestTurn('https://computeengineondemand.appspot.com/turn?username=41784574&key=4080218913');
 }
 
-//////////////////////////////////////
 var nameToSendInput = document.getElementById("nameToSend");
 var startSendSession = document.getElementById("startSendSession");
 var sendButton = document.getElementById("sendButton");
@@ -293,7 +302,7 @@ function setLocalAndSendMessage_Send(sessionDescription) {
   	type: 'offer',
   	message: sessionDescription});
 }
-nameToSend
+
 function setLocalAndSendMessage_Receive(sessionDescription) {
   pcReceive.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
