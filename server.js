@@ -22,20 +22,10 @@ io.sockets.on('connection', function (socket){
 	    socket.emit('log', array);
 	}
 
-	socket.on('', function(){
-		socket.broadcast.emit('');
-	});
-
 	socket.on('message', function (message) {
 		log('Got message: ', message);
 
-		if (message.type === 'offer') {
-			socket.emit('message', message);
-		} 
-		else if (message.type === 'answer') {
-			socket.emit('message', message);
-		} 
-		else if (message === 'bye') {
+		if (message === 'bye') {
 		}
 		else
 			socket.broadcast.emit('message', message);
