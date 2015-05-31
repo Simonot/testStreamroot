@@ -9,8 +9,8 @@ socket.on('log', function (array){
   console.log.apply(console, array);
 });
 
-var pc = null;
-var isSending = false;
+var pcSend = null;
+var pcReceive = null;
 var sendChannel = null
 var receiveChannel = null;
 
@@ -32,32 +32,29 @@ function sendMessage(message){
 socket.on('message', function (message){
   console.log('Client received message:', message);
   if (message == 'want to send message') {
-  	if (isSending) {
-  		sendMessage('wait client end sending')
-  	} else
   		startReceivingSession();
-  } 
-  else if (message == 'wait client end sending') {
-  	startSendingSession();
-  } 
+  }  
   else if (message == 'ready to receive') {
   	console.log('Sending offer to peer');
-  	pc.createOffer(setLocalAndSendMessage, handleCreateOfferError);
+  	pcSend.createOffer(setLocalAndSendMessage_Send, handleCreateOfferError);
   } 
   else if (message.type === 'offer') {
-   	pc.setRemoteDescription(new RTCSessionDescription(message));
+   	pcReceive.setRemoteDescription(new RTCSessionDescription(message));
    	console.log('Sending answer to peer');
-  	pc.createAnswer(setLocalAndSendMessage, handleCreateAnswerError);
+  	pcReceive.createAnswer(setLocalAndSendMessage_Receive, handleCreateAnswerError);
   } 
   else if (message.type === 'answer') {
-    pc.setRemoteDescription(new RTCSessionDescription(message));
+    pcSend.setRemoteDescription(new RTCSessionDescription(message));
   } 
   else if (message.type === 'candidate') {
     var candidate = new RTCIceCandidate({
       sdpMLineIndex: message.label,
       candidate: message.candidate
     });
-    pc.addIceCandidate(candidate);
+    if(candidate.origin === 'sender')
+    	pcReceive.addIceCandidate(candidate);
+    else if (candidate.origin === 'receiver')
+    	pcSend.addIceCandidate(candidate);
   }
 });
 
@@ -77,25 +74,18 @@ sendButton.onclick = sendData;
 
 function startSendingSession() {
 	trace("starting sending session")
-	if (pc != null) {
-		if (sendChannel != null) {
-			sendChannel.close();
-			sendChannel = null;
-		}
-		if (receiveChannel != null) {
-			receiveChannel.close()
-			receiveChannel = null;
-		}
-		pc.close();
-		pc = null;
+	if (pcSend != null) {
+		sendChannel.close();
+		pcSend.close();
+		pcSend = null;
 	}
 	try {
-    	pc = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
-    	pc.onicecandidate = handleIceCandidate;
+    	pcSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+    	pcSend.onicecandidate = handleIceCandidate_Send;
     	trace('Created RTCPeerConnection');
   		try {
     		// Reliable Data Channels not yet supported in Chrome
-    		sendChannel = pc.createDataChannel("sendDataChannel", {reliable: false});
+    		sendChannel = pcSend.createDataChannel("sendDataChannel", {reliable: false});
    			trace('Created send data channel');
   		} catch (e) {
     		alert('Failed to create data channel. ' +
@@ -110,27 +100,20 @@ function startSendingSession() {
     	alert('Cannot create RTCPeerConnection object.');
     	return;
   	}
-	isSending = true;
 	sendMessage('want to send message');
 }
 
 function startReceivingSession() {
-	if (pc != null) {
-		if (sendChannel != null) {
-			sendChannel.close();
-			sendChannel = null;
-		}
-		if (receiveChannel != null) {
-			receiveChannel.close()
-			receiveChannel = null;
-		}
-		pc.close();
-		pc = null;
+	if (pcReceive != null) {
+		receiveChannel.close()
+		receiveChannel = null;
+		pcReceive.close();
+		pcReceive = null;
 	}
 	try {
-    	pc = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
-    	pc.onicecandidate = handleIceCandidate;
-  		pc.ondatachannel = gotReceiveChannel;
+    	pcReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+    	pcReceive.onicecandidate = handleIceCandidate_Receive;
+  		pcReceive.ondatachannel = gotReceiveChannel;
   		trace('Created RTCPeerConnection');
   	} catch (e) {
   		trace('Failed to create PeerConnection, exception: ' + e.message);
@@ -155,8 +138,14 @@ function gotReceiveChannel(event) {
   receiveChannel.onclose = handleReceiveChannelStateChange;
 }
 
-function setLocalAndSendMessage(sessionDescription) {
-  pc.setLocalDescription(sessionDescription);
+function setLocalAndSendMessage_Send(sessionDescription) {
+  pcSend.setLocalDescription(sessionDescription);
+  console.log('setLocalAndSendMessage sending message' , sessionDescription);
+  sendMessage(sessionDescription);
+}
+
+function setLocalAndSendMessage_Receive(sessionDescription) {
+  pcReceive.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
   sendMessage(sessionDescription);
 }
@@ -193,11 +182,25 @@ function handleCreateAnswerError(event){
   console.log('createAnswer() error: ', event);
 }
 
-function handleIceCandidate(event) {
+function handleIceCandidate_Send(event) {
   console.log('handleIceCandidate event: ', event);
   if (event.candidate) {
     sendMessage({
-      origin: 'cient',
+      origin: 'sender',
+      type: 'candidate',
+      label: event.candidate.sdpMLineIndex,
+      id: event.candidate.sdpMid,
+      candidate: event.candidate.candidate});
+  } else {
+    console.log('End of candidates.');
+  }
+}
+
+function handleIceCandidate_Receive(event) {
+  console.log('handleIceCandidate event: ', event);
+  if (event.candidate) {
+    sendMessage({
+      origin: 'receiver',
       type: 'candidate',
       label: event.candidate.sdpMLineIndex,
       id: event.candidate.sdpMid,
