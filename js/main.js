@@ -10,10 +10,19 @@ var name = null;
 var nameSender;
 var nameToSend;
 var nameList = [];
+// var for the conversation use, see README(II.C)
+var pcConversationSend = null;
+var pcConversationReceive = null;
+var numberConversation = 1;
+var sendChannelConversation;
+var receiveChannelConversation;
+var nameNextConversation;
+var nameBeforeConversation;
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
 
+var socket = io.connect();
 //////////////////////////////////////
 // only an utility function
 Array.prototype.inArray = function (value) {
@@ -37,7 +46,6 @@ function trace(text) {
 }
 
 //////////////////////////////////////
-var socket = io.connect();
 trace('new client connected');
 
 /*First part : getting the user name. 
@@ -92,7 +100,7 @@ nameBannedInput.onchange = banName;
 
 function searchName() {
 	var nameSearched = nameSerachedInput.value;
-	var test=nameList.inArray(nameSearched);
+	var test = nameList.inArray(nameSearched);
 	if (nameSearched == "") {
 		document.getElementById("nameSearchedYes").hidden = true;
 		document.getElementById("nameSearchedNo").hidden = true;
@@ -110,7 +118,7 @@ function searchName() {
 
 function banName() {
 	var nameBanned = nameBannedInput.value;
-	var test=nameList.inArray(nameBanned);
+	var test = nameList.inArray(nameBanned);
 	if (nameBanned == "") {
 		document.getElementById("nameBannedYes").hidden = true;
 		document.getElementById("nameBannedNo").hidden = true;
@@ -152,6 +160,142 @@ socket.on('you have been banned', function() {
 });
 
 //////////////////////////////////////
+// conversationContenair div implementation, again read README to understand to P2P network chosen
+var nameAddedInput = document.getElementById("nameAdded");
+var sendConversationMessageInput = document.getElementById("sendConversationMessage");
+var addNameButton = document.getElementById("addNameButton");
+var sendConversationButton = document.getElementById("sendConversationButton");
+nameAddedInput.value = "";
+sendConversationMessageInput.value = "";
+addNameButton.onclick = startSendingConversationSession;
+sendConversationButton.onclick = sendConversationMessage;
+
+function startSendingConversationSession() {
+	nameAdded = nameAddedInput.value;
+	var test = nameList.inArray(nameAdded);
+	if (nameAdded == "") {
+		document.getElementById("addNameError3").hidden = true;
+		document.getElementById("addNameError3").hidden = true;
+		document.getElementById("addNameError4").hidden = true;
+		document.getElementById("addNameError").hidden = false;
+		nameAddedInput.value = "";
+	} else if (nameAdded == name) {
+		document.getElementById("addNameError").hidden = true;
+		document.getElementById("addNameError3").hidden = true;
+		document.getElementById("addNameError4").hidden = true;
+		document.getElementById("addNameError2").hidden = false;
+		nameAddedInput.value = "";
+	} else if(!test) {
+		document.getElementById("addNameError").hidden = true;
+		document.getElementById("addNameError2").hidden = true;
+		document.getElementById("addNameError4").hidden = true;
+		document.getElementById("addNameError3").hidden = false;
+	} else {
+		if (numberConversation == 1) {
+			try {
+    			pcConversation = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+    			pcConversation.onicecandidate = handleIceCandidate_ConversationSend;
+    			trace('Created RTCPeerConnection');
+  				try {
+    				// Reliable Data Channels not yet supported in Chrome
+    				sendChannelConversation = pcConversation.createDataChannel("sendDataChannel", {reliable: false});
+   					trace('Created send data channel');
+  				} catch (e) {
+    				alert('Failed to create data channel. ' +
+        				  'You need Chrome M25 or later with RtpDataChannel enabled');
+    				trace('createDataChannel() failed with exception: ' + e.message);
+    				return;
+  				}
+  				sendChannelConversation.onopen = handleSendChannelConversationStateChange;
+  				sendChannelConversation.onclose = handleSendChannelConversationStateChange;
+  			} catch (e) {
+  				trace('Failed to create PeerConnection, exception: ' + e.message);
+    			alert('Cannot create RTCPeerConnection object.');
+    			return;
+  			}
+			sendMessage({
+				nameFrom: name,
+				nameTo: nameAdded,
+				message: 'want to add to conversation'});
+		}
+	}
+}
+
+function startReceivingConversationSession() {
+	try {
+    	pcConversationReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+    	pcConversationReceive.onicecandidate = handleIceCandidate_ConversationReceive;
+  		pcConversationReceive.ondatachannel = gotReceiveChannel_Conversation;
+  		trace('Created RTCPeerConnection');
+  	} catch (e) {
+  		trace('Failed to create PeerConnection, exception: ' + e.message);
+    	alert('Cannot create RTCPeerConnection object.');
+    	return;
+  	}
+  	sendMessage({
+  		nameFrom: name,
+  		nameTo: nameBeforeConversation,
+  		message: 'ready for conversation'});
+}
+
+function gotReceiveChannel_Conversation(event) {
+  trace('Receive Channel Callback');
+  receiveConversationChannel = event.channel;
+  receiveConversationChannel.onmessage = handleMessage_Conversation;
+  receiveConversationChannel.onopen = handleReceiveChannelStateChange_Conversation;
+  receiveConversationChannel.onclose = handleReceiveChannelStateChange_Conversation;
+}
+
+function setLocalAndSendMessage_ConversationSend(sessionDescription) {
+  pcConversationSend.setLocalDescription(sessionDescription);
+  console.log('setLocalAndSendMessage sending message' , sessionDescription);
+  socket.emit('message', {
+  	nameTo: nameNextConversation,
+  	type: 'offer',
+  	conversation: 'true',
+  	message: sessionDescription});
+}
+
+function setLocalAndSendMessage_Receive(sessionDescription) {
+  pcReceive.setLocalDescription(sessionDescription);
+  console.log('setLocalAndSendMessage sending message' , sessionDescription);
+  socket.emit('message', {
+  	nameTo: nameBeforeConversation,
+  	type: 'answer',
+  	conversation: 'true',
+  	message: sessionDescription});
+}
+
+function handleMessage_Conversation(event) {
+  //TODO
+  //trace('Received message: ' + event.data);
+  //document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
+  //document.getElementById("messageReceived").value = event.data;
+}
+
+function handleSendChannelStateChange_Conversation() {
+  //TODO
+  /*var readyState = sendChannel.readyState;
+  trace('Send channel state is: ' + readyState);
+  if (readyState == "open") {
+    messageToSend.disabled = false;
+    messageToSend.focus();
+    messageToSend.value = "";
+    sendButton.disabled = false;
+  } else {
+    messageToSend.disabled = true;
+    sendButton.disabled = true;
+  }*/
+}
+
+function handleReceiveChannelStateChange_Conversation() {
+  //TODO
+  //var readyState = receiveChannel.readyState;
+  //trace('Receive channel state is: ' + readyState);
+}
+
+
+//////////////////////////////////////
 // messageContenair div implementation, all the webRTC exanging messages and function
 
 // utility function to follow exange of messaging with the server
@@ -168,17 +312,52 @@ socket.on('message', function (message){
   		startReceivingSession();
   }  
   else if (message.message == 'ready to receive') {
-  	console.log('Sending offer to peer');
   	nameToSend = message.nameFrom;
+  	console.log('Sending offer to peer');
   	pcSend.createOffer(setLocalAndSendMessage_Send, handleCreateOfferError);
   } 
+  else if (message.message == 'want to add to conversation') {
+  	if (pcConversationReceive != null)
+  		sendMessage({
+  			nameFrom: name,
+			nameTo: message.nameFrom,
+			message: 'already in a conversation'});
+  	else {
+  		nameBeforeConversation = message.nameFrom;
+  		startReceivingConversationSession();
+  	}
+  }
+  else if (message.message == 'already in a conversation') {
+  	sendChannelConversation.close()
+	sendChannelConversation = null;
+	pcConversation.close();
+	pcConversation = null;
+	document.getElementById("addNameError").hidden = true;
+	document.getElementById("addNameError2").hidden = true;
+	document.getElementById("addNameError3").hidden = true;
+	document.getElementById("addNameError4").hidden = false;
+  }
+   else if (message.message == 'ready for conversation') {
+   	nameNextConversation = message.nameFrom;
+   	console.log('Sending offer to peer');
+   	pcConversationSend.createOffer(setLocalAndSendMessage_ConversationSend, handleCreateOfferError);
+  }
   else if (message.type === 'offer') {
-   	pcReceive.setRemoteDescription(new RTCSessionDescription(message));
-   	console.log('Sending answer to peer');
-  	pcReceive.createAnswer(setLocalAndSendMessage_Receive, handleCreateAnswerError);
+  	if (message.conversation === 'false') {
+   		pcReceive.setRemoteDescription(new RTCSessionDescription(message.message));
+   		console.log('Sending answer to peer');
+  		pcReceive.createAnswer(setLocalAndSendMessage_Receive, handleCreateAnswerError);
+  	} else if (message.conversation === 'true') {
+  		pcConversationReceive.setRemoteDescription(new RTCSessionDescription(message.message));
+   		console.log('Sending answer to peer');
+  		pcConversationReceive.createAnswer(setLocalAndSendMessage_ConversationReceive, handleCreateAnswerError);
+  	}
   } 
   else if (message.type === 'answer') {
-    pcSend.setRemoteDescription(new RTCSessionDescription(message));
+  	if (message.conversation === 'false')
+    	pcSend.setRemoteDescription(new RTCSessionDescription(message.message));
+    else if (message.conversation === 'true')
+    	pcConversationSend.setRemoteDescription(new RTCSessionDescription(message.message));
   } 
   else if (message.type === 'candidate') {
     var candidate = new RTCIceCandidate({
@@ -294,12 +473,12 @@ function gotReceiveChannel(event) {
 }
 
 function setLocalAndSendMessage_Send(sessionDescription) {
-  sessionDescription['nameTo'] = nameToSend;
   pcSend.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
   socket.emit('message', {
   	nameTo: nameToSend,
   	type: 'offer',
+  	conversation: 'false',
   	message: sessionDescription});
 }
 
@@ -309,6 +488,7 @@ function setLocalAndSendMessage_Receive(sessionDescription) {
   socket.emit('message', {
   	nameTo: nameSender,
   	type: 'answer',
+  	conversation: 'false',
   	message: sessionDescription});
 }
 

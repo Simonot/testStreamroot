@@ -59,6 +59,19 @@
 				(received from   <span id="messsageReceivedFrom">...</span>)</br>
 				<textarea id="messageReceived" disabled></textarea>
   			</div>
+  			<div id="conversationContenair" class="contenair">
+				Add name to the conversation : </br>
+				<input type="text" id="nameAdded"></input>
+				<button id="addNameButton">Add</button></br></br>
+				<span id="addNameError" class="textError" hidden> Please chose a name :)</br></span>
+				<span id="addNameError2" class="textError" hidden> Please chose a name wich is not in the conversation yet :)</br></span>
+				<span id="addNameError3" class="textError" hidden> Please chose a name wich is connected (try use "search name" :))</br></span>
+				<span id="addNameError4" class="textError" hidden> The name is already in a conversation, please chose another name :)</br></span>
+				<input id="sendConversationMessage"></input>
+				<button id="sendConversationButton">Send</button></br>
+				<div id="conversationMessages">
+				</div>
+  			</div>
   		</div>
 
   		

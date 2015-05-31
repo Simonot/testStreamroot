@@ -53,10 +53,14 @@ io.sockets.on('connection', function (socket){
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.message === 'ready to receive') {
 			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'want to add to conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'already in a conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'offer') {
-			nameClientSockets[message.nameTo].emit('message', message.message);
+			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'answer') {
-			nameClientSockets[message.nameTo].emit('message', message.message);
+			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'candidate') {
 			nameClientSockets[message.nameTo].emit('message', message);
 		}
