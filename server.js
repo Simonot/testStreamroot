@@ -11,6 +11,8 @@ var app = http.createServer(function (req, res) {
 });
 
 //socket.io functions
+var nameClientSockets = {};
+
 var io = require('socket.io').listen(app);
 io.sockets.on('connection', function (socket){
 
@@ -22,10 +24,25 @@ io.sockets.on('connection', function (socket){
 	    socket.emit('log', array);
 	}
 
+	socket.on('new client connected', function(name) {
+		log_comment(name);
+		nameClientSockets[name] = socket;
+		socket.broadcast.emit('new client connected', name);
+	});
+
 	socket.on('message', function (message) {
 		log('Got message: ', message);
 
-		if (message === 'bye') {
+		if (message.message === 'want to send message') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'ready to receive') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.type === 'offer') {
+			nameClientSockets[message.nameTo].emit('message', message.message);
+		} else if (message.type === 'answer') {
+			nameClientSockets[message.nameTo].emit('message', message.message);
+		} else if (message.type === 'candidate') {
+			nameClientSockets[message.nameTo].emit('message', message);
 		}
 		else
 			socket.broadcast.emit('message', message);

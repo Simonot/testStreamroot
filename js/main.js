@@ -1,21 +1,46 @@
-var isInitiator;
-
-//name = prompt("Enter your name:");
-console.log(name + ' has joined the room !');
-
-var socket = io.connect();
-
-socket.on('log', function (array){
-  console.log.apply(console, array);
-});
-
 var pcSend = null;
 var pcReceive = null;
 var sendChannel = null
 var receiveChannel = null;
+var name = null;
+var nameSender;
+var nameToSend;
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
+
+//////////////////////////////////////
+trace('new client connected');
+
+var nameClient = document.getElementById("nameClient");
+nameClient.disabled = false;
+nameClient.value= "";
+nameClient.onchange = nameClientAdd;
+
+
+function nameClientAdd() {
+	name = nameClient.value;
+	//if (searchName(name)) {
+	//	nameClient.value = "";
+	//	document.getElementById("nameClientError").hidden = false;
+	//} else {
+		document.getElementById("nameClientError").hidden = true;
+		document.getElementById("contenairsDiv").hidden = false;
+		startSendSession.disabled = false;
+		nameClient.disabled = true;
+		nameToSendInput.disabled = false;
+		socket.emit('new client connected', name);
+}
+//////////////////////////////////////
+var socket = io.connect();
+
+socket.on('new client connected', function(name) {
+	trace('new client connected, named ' + name);
+});
+
+socket.on('log', function (array){
+  console.log.apply(console, array);
+});
 
 function trace(text) {
   console.log((performance.now() / 1000).toFixed(3) + ": " + text);
@@ -31,11 +56,13 @@ function sendMessage(message){
 
 socket.on('message', function (message){
   console.log('Client received message:', message);
-  if (message == 'want to send message') {
+  if (message.message == 'want to send message') {
+  		nameSender = message.nameFrom;
   		startReceivingSession();
   }  
-  else if (message == 'ready to receive') {
+  else if (message.message == 'ready to receive') {
   	console.log('Sending offer to peer');
+  	nameToSend = message.nameFrom;
   	pcSend.createOffer(setLocalAndSendMessage_Send, handleCreateOfferError);
   } 
   else if (message.type === 'offer') {
@@ -51,9 +78,9 @@ socket.on('message', function (message){
       sdpMLineIndex: message.label,
       candidate: message.candidate
     });
-    if(candidate.origin === 'sender')
+    if(message.sender === 'true')
     	pcReceive.addIceCandidate(candidate);
-    else if (candidate.origin === 'receiver')
+    else if (message.sender === 'false')
     	pcSend.addIceCandidate(candidate);
   }
 });
@@ -62,17 +89,21 @@ if (location.hostname != "localhost") {
   requestTurn('https://computeengineondemand.appspot.com/turn?username=41784574&key=4080218913');
 }
 
-///////////////////////////////////////
+//////////////////////////////////////
+var nameToSendInput = document.getElementById("nameToSend");
 var startSendSession = document.getElementById("startSendSession");
 var sendButton = document.getElementById("sendButton");
 var messageToSend = document.getElementById("messageToSend");
 messageToSend.value = "Press Start Sending, enter some text, then press Send.";
+nameToSendInput.disabled = true;
+nameToSendInput.value = "";
 messageToSend.disabled = true;
 sendButton.disabled = true;
 startSendSession.onclick = startSendingSession;
 sendButton.onclick = sendData;
 
 function startSendingSession() {
+	nameToSend = nameToSendInput.value;
 	trace("starting sending session")
 	if (pcSend != null) {
 		sendChannel.close();
@@ -100,7 +131,10 @@ function startSendingSession() {
     	alert('Cannot create RTCPeerConnection object.');
     	return;
   	}
-	sendMessage('want to send message');
+	sendMessage({
+		message: 'want to send message', 
+		nameFrom: name,
+		nameTo: nameToSend});
 }
 
 function startReceivingSession() {
@@ -120,7 +154,10 @@ function startReceivingSession() {
     	alert('Cannot create RTCPeerConnection object.');
     	return;
   	}
-  	sendMessage('ready to receive');
+  	sendMessage({
+  		message: 'ready to receive',
+  		nameFrom: name,
+  		nameTo: nameSender});
 }
 
 function sendData() {
@@ -139,15 +176,22 @@ function gotReceiveChannel(event) {
 }
 
 function setLocalAndSendMessage_Send(sessionDescription) {
+  sessionDescription['nameTo'] = nameToSend;
   pcSend.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
-  sendMessage(sessionDescription);
+  socket.emit('message', {
+  	nameTo: nameToSend,
+  	type: 'offer',
+  	message: sessionDescription});
 }
 
 function setLocalAndSendMessage_Receive(sessionDescription) {
   pcReceive.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
-  sendMessage(sessionDescription);
+  socket.emit('message', {
+  	nameTo: nameSender,
+  	type: 'answer',
+  	message: sessionDescription});
 }
 
 function handleMessage(event) {
@@ -186,7 +230,8 @@ function handleIceCandidate_Send(event) {
   console.log('handleIceCandidate event: ', event);
   if (event.candidate) {
     sendMessage({
-      origin: 'sender',
+      nameTo: nameToSend,	
+      sender: 'true',
       type: 'candidate',
       label: event.candidate.sdpMLineIndex,
       id: event.candidate.sdpMid,
@@ -200,7 +245,8 @@ function handleIceCandidate_Receive(event) {
   console.log('handleIceCandidate event: ', event);
   if (event.candidate) {
     sendMessage({
-      origin: 'receiver',
+      nameTo: nameSender,
+      sender: 'false',
       type: 'candidate',
       label: event.candidate.sdpMLineIndex,
       id: event.candidate.sdpMid,
