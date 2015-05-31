@@ -166,7 +166,8 @@ var sendConversationMessageInput = document.getElementById("sendConversationMess
 var addNameButton = document.getElementById("addNameButton");
 var sendConversationButton = document.getElementById("sendConversationButton");
 nameAddedInput.value = "";
-sendConversationMessageInput.value = "";
+sendConversationMessageInput.value = "add first";
+sendConversationMessageInput.disabled = true;
 addNameButton.onclick = startSendingConversationSession;
 sendConversationButton.onclick = sendConversationMessage;
 
@@ -274,18 +275,15 @@ function handleMessage_Conversation(event) {
 }
 
 function handleSendChannelStateChange_Conversation() {
-  //TODO
-  /*var readyState = sendChannel.readyState;
-  trace('Send channel state is: ' + readyState);
+  var readyState = sendChannelConversation.readyState;
+  trace('Send channel conversation state is: ' + readyState);
   if (readyState == "open") {
-    messageToSend.disabled = false;
-    messageToSend.focus();
-    messageToSend.value = "";
-    sendButton.disabled = false;
+    sendConversationMessageInput.disabled = false;
+    sendConversationMessageInput.focus();
+    sendConversationMessageInput.value = "";
   } else {
-    messageToSend.disabled = true;
-    sendButton.disabled = true;
-  }*/
+    sendConversationMessageInput.disabled = true;
+  }
 }
 
 function handleReceiveChannelStateChange_Conversation() {
