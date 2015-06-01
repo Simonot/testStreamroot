@@ -168,11 +168,26 @@ var sendConversationMessageInput = document.getElementById("sendConversationMess
 var addNameButton = document.getElementById("addNameButton");
 var sendConversationButton = document.getElementById("sendConversationButton");
 nameAddedInput.value = "";
+sendConversationMessageInput.value = "";
 sendConversationMessageInput.value = "add first";
 sendConversationMessageInput.disabled = true;
 addNameButton.disabled = false;
 addNameButton.onclick = verifyNameAdded;
 sendConversationButton.onclick = makeItSenderAndSend;
+
+var conversationMessageDiv, pseudoSpanConversation, messageSpanConversation;
+
+for(var i = 0; i < 10; i++) {
+  conversationMessageDiv = document.createElement('div');
+  pseudoSpanConversation = document.createElement('span');
+  messageSpanConversation = document.createElement('span');
+  pseudoSpanConversation.className = 'pseudoSpanConversation';
+  messageSpanConversation.className = 'messageSpanConversation';
+  conversationMessageDiv.appendChild(pseudoSpanConversation);
+  conversationMessageDiv.appendChild(messageSpanConversation);
+
+  document.getElementById("conversationMessages").appendChild(conversationMessageDiv);
+}
 
 function verifyNameAdded() {
   if (numberConversation == 5) {
@@ -294,10 +309,11 @@ function sendConversationData() {
       counter: numberConversation,
       message: sendConversationMessageInput.value};
     isConversationSender = false;
+    sendConversationMessageInput.value = "";
   }
   trace('initial counter ' + dataConversation.counter);
   if (dataConversation.newNameAdded == 'false')
-    displayConversationMessage(dataConversation.message);
+    displayConversationMessage(dataConversation.nameSender, dataConversation.message);
   dataConversation.counter = dataConversation.counter - 1;
   if (dataConversation.counter != 0) {
     var data = JSON.stringify(dataConversation);
@@ -306,8 +322,18 @@ function sendConversationData() {
   }
 }
 
-function displayConversationMessage(message) {
-  document.getElementById("conversationMessages").innerHTML = message;
+function displayConversationMessage(pseudo, message) {
+  var currentDiv = document.getElementById("conversationMessages").lastChild;
+  for(var i = 0; i < 9; i++) {
+    currentDiv = currentDiv.previousSibling;
+    currentDiv.nextSibling.firstChild.innerHTML = currentDiv.firstChild.innerHTML;
+    currentDiv.nextSibling.lastChild.innerHTML =  currentDiv.lastChild.innerHTML;
+    }
+  //currentDiv = currentDiv.nextSibling;
+
+  currentDiv.firstChild.innerHTML = pseudo;
+  currentDiv.lastChild.innerHTML = message;
+  //document.getElementById("conversationMessages").innerHTML = message;
 }
 
 function gotReceiveChannel_Conversation(event) {
