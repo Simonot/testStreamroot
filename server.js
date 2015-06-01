@@ -55,7 +55,11 @@ io.sockets.on('connection', function (socket){
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.message === 'want to add to conversation') {
 			nameClientSockets[message.nameTo].emit('message', message);
-		} else if (message.message === 'already in a conversation') {
+		} else if (message.message === 'are you in conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'in conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'ready for conversation') {
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'offer') {
 			nameClientSockets[message.nameTo].emit('message', message);

@@ -14,10 +14,12 @@ var nameList = [];
 var pcConversationSend = null;
 var pcConversationReceive = null;
 var numberConversation = 1;
-var sendChannelConversation;
-var receiveChannelConversation;
-var nameNextConversation;
+var sendChannel_Conversation;
+var receiveChannel_Conversation;
+var nameNextConversation = null;
 var nameBeforeConversation;
+var dataConversation;
+var isConversationSender = false;
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
@@ -168,61 +170,101 @@ var sendConversationButton = document.getElementById("sendConversationButton");
 nameAddedInput.value = "";
 sendConversationMessageInput.value = "add first";
 sendConversationMessageInput.disabled = true;
-addNameButton.onclick = startSendingConversationSession;
-sendConversationButton.onclick = sendConversationMessage;
+addNameButton.disabled = false;
+addNameButton.onclick = verifyNameAdded;
+sendConversationButton.onclick = makeItSenderAndSend;
+
+function verifyNameAdded() {
+  if (numberConversation == 5) {
+    document.getElementById("addNameError").hidden = true;
+    document.getElementById("addNameError2").hidden = true;
+    document.getElementById("addNameError3").hidden = true;
+    document.getElementById("addNameError4").hidden = true;
+    document.getElementById("addNameError5").hidden = false;
+    addNameButton.disabled = true;
+  } else {
+    nameAdded = nameAddedInput.value;
+    var test = nameList.inArray(nameAdded);
+    if (nameAdded == "") {
+      document.getElementById("addNameError2").hidden = true;
+      document.getElementById("addNameError3").hidden = true;
+      document.getElementById("addNameError4").hidden = true;
+      document.getElementById("addNameError5").hidden = true;
+      document.getElementById("addNameError").hidden = false;
+      nameAddedInput.value = "";
+    } else if (nameAdded == name) {
+      document.getElementById("addNameError").hidden = true;
+      document.getElementById("addNameError3").hidden = true;
+      document.getElementById("addNameError4").hidden = true;
+      document.getElementById("addNameError5").hidden = true;
+      document.getElementById("addNameError2").hidden = false;
+      nameAddedInput.value = "";
+    } else if(!test) {
+      document.getElementById("addNameError").hidden = true;
+      document.getElementById("addNameError2").hidden = true;
+      document.getElementById("addNameError4").hidden = true;
+      document.getElementById("addNameError5").hidden = true;
+      document.getElementById("addNameError3").hidden = false;
+    } else {
+      sendMessage({
+        nameTo: nameAdded,
+        nameFrom: name,
+        message: 'are you in conversation'});
+    }
+  }
+}
 
 function startSendingConversationSession() {
-	nameAdded = nameAddedInput.value;
-	var test = nameList.inArray(nameAdded);
-	if (nameAdded == "") {
-		document.getElementById("addNameError3").hidden = true;
-		document.getElementById("addNameError3").hidden = true;
-		document.getElementById("addNameError4").hidden = true;
-		document.getElementById("addNameError").hidden = false;
-		nameAddedInput.value = "";
-	} else if (nameAdded == name) {
-		document.getElementById("addNameError").hidden = true;
-		document.getElementById("addNameError3").hidden = true;
-		document.getElementById("addNameError4").hidden = true;
-		document.getElementById("addNameError2").hidden = false;
-		nameAddedInput.value = "";
-	} else if(!test) {
-		document.getElementById("addNameError").hidden = true;
-		document.getElementById("addNameError2").hidden = true;
-		document.getElementById("addNameError4").hidden = true;
-		document.getElementById("addNameError3").hidden = false;
-	} else {
-		if (numberConversation == 1) {
-			try {
-    			pcConversation = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
-    			pcConversation.onicecandidate = handleIceCandidate_ConversationSend;
-    			trace('Created RTCPeerConnection');
-  				try {
-    				// Reliable Data Channels not yet supported in Chrome
-    				sendChannelConversation = pcConversation.createDataChannel("sendDataChannel", {reliable: false});
-   					trace('Created send data channel');
-  				} catch (e) {
-    				alert('Failed to create data channel. ' +
-        				  'You need Chrome M25 or later with RtpDataChannel enabled');
-    				trace('createDataChannel() failed with exception: ' + e.message);
-    				return;
-  				}
-  				sendChannelConversation.onopen = handleSendChannelConversationStateChange;
-  				sendChannelConversation.onclose = handleSendChannelConversationStateChange;
-  			} catch (e) {
-  				trace('Failed to create PeerConnection, exception: ' + e.message);
-    			alert('Cannot create RTCPeerConnection object.');
-    			return;
-  			}
-			sendMessage({
-				nameFrom: name,
-				nameTo: nameAdded,
-				message: 'want to add to conversation'});
-		}
-	}
+	if (pcConversationSend != null) {
+    // new member add, we have to tell it to the others names of the conversation
+    //dataConversation = {
+    //  newNameAdded: 'true',
+    //  number: (numberConversation+1),
+    //  counter: numberConversation};
+    //sendConversationData();
+    // now we close the pcConversationSend and we then initilize it with the new name
+    sendChannel_Conversation.close();
+    sendChannel_Conversation = null;
+    pcConversationSend.close();
+    pcConversationSend = null;
+  }
+	try {
+  	pcConversationSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+  	pcConversationSend.onicecandidate = handleIceCandidate_ConversationSend;
+  	trace('Created RTCPeerConnection');
+  	try {
+  		// Reliable Data Channels not yet supported in Chrome
+  		sendChannel_Conversation = pcConversationSend.createDataChannel("sendDataChannel", {reliable: false});
+  		trace('Created send data channel');
+   		} catch (e) {
+   		alert('Failed to create data channel. ' +
+     			  'You need Chrome M25 or later with RtpDataChannel enabled');
+   		trace('createDataChannel() failed with exception: ' + e.message);
+   		return;
+    	}
+  	 	sendChannel_Conversation.onopen = handleSendChannelStateChange_Conversation;
+  	  sendChannel_Conversation.onclose = handleSendChannelStateChange_Conversation;
+  	} catch (e) {
+      trace('Failed to create PeerConnection, exception: ' + e.message);
+    	alert('Cannot create RTCPeerConnection object.');
+    	return;
+  	}
+    sendMessage({
+      nameFrom: name,
+      nameTo: nameAdded,
+      numberNames: numberConversation,
+      nameToConnect: nameNextConversation,
+      message: 'want to add to conversation'});
+    numberConversation = numberConversation + 1;
 }
 
 function startReceivingConversationSession() {
+  if (pcConversationReceive != null) {
+    receiveChannel_Conversation.close();
+    receiveChannel_Conversation = null;
+    pcConversationReceive.close();
+    pcConversationReceive = null;
+  }
 	try {
     	pcConversationReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
     	pcConversationReceive.onicecandidate = handleIceCandidate_ConversationReceive;
@@ -239,12 +281,41 @@ function startReceivingConversationSession() {
   		message: 'ready for conversation'});
 }
 
+function makeItSenderAndSend() {
+  isConversationSender = true;
+  sendConversationData();
+}
+
+function sendConversationData() {
+  if (isConversationSender) {
+    dataConversation = {
+      newNameAdded: 'false',
+      nameSender: name,
+      counter: numberConversation,
+      message: sendConversationMessageInput.value};
+    isConversationSender = false;
+  }
+  trace('initial counter ' + dataConversation.counter);
+  if (dataConversation.newNameAdded == 'false')
+    displayConversationMessage(dataConversation.message);
+  dataConversation.counter = dataConversation.counter - 1;
+  if (dataConversation.counter != 0) {
+    var data = JSON.stringify(dataConversation);
+    sendChannel_Conversation.send(data);
+    trace('Sent conversation data: ' + data);
+  }
+}
+
+function displayConversationMessage(message) {
+  document.getElementById("conversationMessages").innerHTML = message;
+}
+
 function gotReceiveChannel_Conversation(event) {
   trace('Receive Channel Callback');
-  receiveConversationChannel = event.channel;
-  receiveConversationChannel.onmessage = handleMessage_Conversation;
-  receiveConversationChannel.onopen = handleReceiveChannelStateChange_Conversation;
-  receiveConversationChannel.onclose = handleReceiveChannelStateChange_Conversation;
+  receiveChannel_Conversation = event.channel;
+  receiveChannel_Conversation.onmessage = handleMessage_Conversation;
+  receiveChannel_Conversation.onopen = handleReceiveChannelStateChange_Conversation;
+  receiveChannel_Conversation.onclose = handleReceiveChannelStateChange_Conversation;
 }
 
 function setLocalAndSendMessage_ConversationSend(sessionDescription) {
@@ -257,8 +328,8 @@ function setLocalAndSendMessage_ConversationSend(sessionDescription) {
   	message: sessionDescription});
 }
 
-function setLocalAndSendMessage_Receive(sessionDescription) {
-  pcReceive.setLocalDescription(sessionDescription);
+function setLocalAndSendMessage_ConversationReceive(sessionDescription) {
+  pcConversationReceive.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
   socket.emit('message', {
   	nameTo: nameBeforeConversation,
@@ -268,14 +339,17 @@ function setLocalAndSendMessage_Receive(sessionDescription) {
 }
 
 function handleMessage_Conversation(event) {
-  //TODO
-  //trace('Received message: ' + event.data);
-  //document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
-  //document.getElementById("messageReceived").value = event.data;
+  trace('Received message: ' + event.data);
+  dataConversation = JSON.parse(event.data);
+  trace('data counter ' + dataConversation.counter);
+  trace('data message ' + dataConversation.message);
+  if (dataConversation.newNameAdded == 'true')
+    numberConversation = dataConversation.number;
+  sendConversationData();
 }
 
 function handleSendChannelStateChange_Conversation() {
-  var readyState = sendChannelConversation.readyState;
+  var readyState = sendChannel_Conversation.readyState;
   trace('Send channel conversation state is: ' + readyState);
   if (readyState == "open") {
     sendConversationMessageInput.disabled = false;
@@ -287,10 +361,42 @@ function handleSendChannelStateChange_Conversation() {
 }
 
 function handleReceiveChannelStateChange_Conversation() {
-  //TODO
-  //var readyState = receiveChannel.readyState;
-  //trace('Receive channel state is: ' + readyState);
+  var readyState = receiveChannel_Conversation.readyState;
+  trace('Receive conversation channel state is: ' + readyState);
 }
+
+function handleIceCandidate_ConversationSend(event) {
+  console.log('handleIceCandidate event: ', event);
+  if (event.candidate) {
+    sendMessage({
+      nameTo: nameNextConversation,
+      conversation: 'true',
+      sender: 'true',
+      type: 'candidate',
+      label: event.candidate.sdpMLineIndex,
+      id: event.candidate.sdpMid,
+      candidate: event.candidate.candidate});
+  } else {
+    console.log('End of candidates.');
+  }
+}
+
+function handleIceCandidate_ConversationReceive(event) {
+  console.log('handleIceCandidate event: ', event);
+  if (event.candidate) {
+    sendMessage({
+      nameTo: nameBeforeConversation,
+      conversation: 'true',
+      sender: 'false',
+      type: 'candidate',
+      label: event.candidate.sdpMLineIndex,
+      id: event.candidate.sdpMid,
+      candidate: event.candidate.candidate});
+  } else {
+    console.log('End of candidates.');
+  }
+}
+
 
 
 //////////////////////////////////////
@@ -314,28 +420,61 @@ socket.on('message', function (message){
   	console.log('Sending offer to peer');
   	pcSend.createOffer(setLocalAndSendMessage_Send, handleCreateOfferError);
   } 
-  else if (message.message == 'want to add to conversation') {
+  else if (message.message == 'are you in conversation') {
   	if (pcConversationReceive != null)
   		sendMessage({
   			nameFrom: name,
-			nameTo: message.nameFrom,
-			message: 'already in a conversation'});
-  	else {
-  		nameBeforeConversation = message.nameFrom;
-  		startReceivingConversationSession();
-  	}
+			  nameTo: message.nameFrom,
+        inConversation: 'true',
+			  message: 'in conversation'});
+    else
+      sendMessage({
+        nameFrom: name,
+        nameTo: message.nameFrom,
+        inConversation: 'false',
+        message: 'in conversation'});
   }
-  else if (message.message == 'already in a conversation') {
-  	sendChannelConversation.close()
-	sendChannelConversation = null;
-	pcConversation.close();
-	pcConversation = null;
-	document.getElementById("addNameError").hidden = true;
-	document.getElementById("addNameError2").hidden = true;
-	document.getElementById("addNameError3").hidden = true;
-	document.getElementById("addNameError4").hidden = false;
+  else if (message.message == 'in conversation') {
+    if (message.inConversation == 'true') {
+	    document.getElementById("addNameError").hidden = true;
+	    document.getElementById("addNameError2").hidden = true;
+	    document.getElementById("addNameError3").hidden = true;
+      document.getElementById("addNameError5").hidden = true;
+	    document.getElementById("addNameError4").hidden = false;
+    } else if (message.inConversation == 'false')
+      if (numberConversation == 1)
+        startSendingConversationSession();
+      else {
+        dataConversation = {
+          newNameAdded: 'true',
+          number: (numberConversation+1),
+          counter: numberConversation};
+        sendConversationData();
+        startSendingConversationSession();
+      }
+  } 
+  else if (message.message == 'want to add to conversation') {
+  // See README (II.C) to understand that all the condition are their to make sure
+  // that the adding operacion process is made well
+      if (numberConversation <= message.numberNames) {
+        numberConversation = message.numberNames;
+      }
+      if (message.nameToConnect == null) {
+        // verify the case first add
+        if (numberConversation == 1) {
+          nameAdded = message.nameFrom;
+          startSendingConversationSession();
+        }
+        nameBeforeConversation = message.nameFrom;
+        startReceivingConversationSession();
+    } else {
+        nameAdded = message.nameToConnect;
+        startSendingConversationSession();
+        nameBeforeConversation = message.nameFrom;
+        startReceivingConversationSession();
+    }
   }
-   else if (message.message == 'ready for conversation') {
+  else if (message.message == 'ready for conversation') {
    	nameNextConversation = message.nameFrom;
    	console.log('Sending offer to peer');
    	pcConversationSend.createOffer(setLocalAndSendMessage_ConversationSend, handleCreateOfferError);
@@ -362,10 +501,16 @@ socket.on('message', function (message){
       sdpMLineIndex: message.label,
       candidate: message.candidate
     });
-    if(message.sender === 'true')
-    	pcReceive.addIceCandidate(candidate);
+    if (message.sender === 'true')
+      if (message.conversation === 'true')
+        pcConversationReceive.addIceCandidate(candidate);
+      else
+    	  pcReceive.addIceCandidate(candidate);
     else if (message.sender === 'false')
-    	pcSend.addIceCandidate(candidate);
+      if (message.conversation === 'true')
+        pcConversationSend.addIceCandidate(candidate);
+      else
+        pcSend.addIceCandidate(candidate);
   }
 });
 
@@ -459,7 +604,6 @@ function sendData() {
   var data = messageToSend.value;
   sendChannel.send(data);
   trace('Sent data: ' + data);
-  isSending = false;
 }
 
 function gotReceiveChannel(event) {
@@ -504,6 +648,7 @@ function handleSendChannelStateChange() {
     messageToSend.focus();
     messageToSend.value = "";
     sendButton.disabled = false;
+    numberConversation
   } else {
     messageToSend.disabled = true;
     sendButton.disabled = true;
@@ -528,6 +673,7 @@ function handleIceCandidate_Send(event) {
   if (event.candidate) {
     sendMessage({
       nameTo: nameToSend,	
+      conversation: 'false',
       sender: 'true',
       type: 'candidate',
       label: event.candidate.sdpMLineIndex,
@@ -543,6 +689,7 @@ function handleIceCandidate_Receive(event) {
   if (event.candidate) {
     sendMessage({
       nameTo: nameSender,
+      conversation: 'false',
       sender: 'false',
       type: 'candidate',
       label: event.candidate.sdpMLineIndex,
