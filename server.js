@@ -33,6 +33,11 @@ io.sockets.on('connection', function (socket){
 		socket.broadcast.emit('new client connected', name);
 	});
 
+	socket.on('client disconnected', function(name) {
+		nameList.splice(nameList.indexOf(name), 1);
+		socket.broadcast.emit('name list', nameList);
+	});
+
 	socket.on('want name list', function() {
 		socket.emit('name list', nameList);
 	});
@@ -51,6 +56,8 @@ io.sockets.on('connection', function (socket){
 	socket.on('message', function (message) {
 		log('Got message: ', message);
 
+		// you can only put nameClientSockets[message.nameTo].emit('message', message);
+		// but that way if I want to add some action in the signialing process, i can
 		if (message.message === 'want to send message') {
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.message === 'ready to receive') {
@@ -71,6 +78,8 @@ io.sockets.on('connection', function (socket){
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.message === 'you can leave') {
 			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'bye sender') {
+			nameClientSockets[message.nameTo].emit('bye sender');
 		} else if (message.type === 'offer') {
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'answer') {

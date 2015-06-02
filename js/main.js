@@ -94,6 +94,37 @@ socket.on('new client connected', function(name) {
 	});
 });
 
+window.onbeforeunload = function(e) {
+  if (!banned) {
+    if (numberConversation > 1)
+      leaveConversation();
+    socket.emit('client disconnected', name);
+  }
+  if (pcSend != null) {
+    sendChannel.close();
+    sendChannel = null;
+    pcSend.close();
+    pcSend = null;
+  }
+  if (pcReceive != null) {
+    sendMessage({
+      nameTo: nameSender,
+      nameFrom: name,
+      message: 'bye sender'})
+    receiveChannel.close();
+    receiveChannel = null;
+    pcReceive.close();
+    pcReceive = null;
+  }
+}
+
+socket.on('bye sender', function() {
+  messageToSend.value = "Name has been banned or has disconnected, press Start again.";
+  nameToSendInput.value = "";
+  messageToSend.disabled = true;
+  sendButton.disabled = true;
+});
+
 //////////////////////////////////////
 // clientConnected div, implementation of search and ban
 var nameSerachedInput = document.getElementById("nameSearched");
@@ -150,6 +181,10 @@ function banName() {
 function banProcedure() {
   nameList = [];
   if (pcReceive != null) {
+    sendMessage({
+      nameTo: nameSender,
+      nameFrom: name,
+      message: 'bye sender'})
     receiveChannel.close()
     receiveChannel = null;
     pcReceive.close();
@@ -157,6 +192,7 @@ function banProcedure() {
   }
   if (pcSend != null) {
     sendChannel.close();
+    sendChannel = null;
     pcSend.close();
     pcSend = null;
   }
@@ -168,7 +204,6 @@ function banProcedure() {
 
 socket.on('you have been banned', function() {
   if (numberConversation > 1) {
-    trace('start ban');
     banned = true;
     leaveConversation();
   }
@@ -530,8 +565,6 @@ function handleIceCandidate_ConversationReceive(event) {
     console.log('End of candidates.');
   }
 }
-
-
 
 //////////////////////////////////////
 // messageContenair div implementation, all the webRTC exanging messages and function
