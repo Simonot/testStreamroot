@@ -22,6 +22,8 @@ var nameBeforeConversation = null;
 var dataConversation;
 var isConversationSender = false;
 var namesInConversation = [];
+// var sending image, see README(II.D)
+var image;
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
@@ -50,16 +52,16 @@ function trace(text) {
 }
 
 //////////////////////////////////////
+// see README(I)
+// getting the user name, if valide delete hidden attribute of contenairsDiv */
 trace('new client connected');
 
-/*First part : getting the user name. 
-If valide delete hidden attribute of contenairsDiv */
 var nameClient = document.getElementById("nameClient");
 nameClient.disabled = false;
 nameClient.value= "";
 nameClient.onchange = nameClientAdd;
 
-//getting the name list of the client already connected to be sure your name is valide
+// getting the name list of the client already connected to be sure your name is valide
 socket.emit('want name list');
 socket.on('name list', function(nameListReceived) {
 	nameList = nameListReceived;
@@ -122,10 +124,11 @@ socket.on('bye sender', function() {
   messageToSend.value = "Name has been banned or has disconnected, press Start again.";
   nameToSendInput.value = "";
   messageToSend.disabled = true;
-  sendButton.disabled = true;
+  sendMessageButton.disabled = true;
 });
 
 //////////////////////////////////////
+// see README (II.A)
 // clientConnected div, implementation of search and ban
 var nameSerachedInput = document.getElementById("nameSearched");
 var nameBannedInput = document.getElementById("nameBanned");
@@ -212,6 +215,427 @@ socket.on('you have been banned', function() {
 });
 
 //////////////////////////////////////
+// connection free STUN TURN Server google
+if (location.hostname != "localhost") {
+  requestTurn('https://computeengineondemand.appspot.com/turn?username=41784574&key=4080218913');
+}
+
+// utility function to follow exange of messaging with the server
+function sendMessage(message){
+  console.log('Client sending message: ', message);
+    socket.emit('message', message);
+}
+
+// again, be sure to have red README (II.B) to understand to normal stack exange of messages
+socket.on('message', function (message){
+  console.log('Client received message:', message);
+  if (message.message == 'want to send message') {
+      nameSender = message.nameFrom;
+      startReceivingSession();
+  }  
+  else if (message.message == 'ready to receive') {
+    nameToSend = message.nameFrom;
+    console.log('Sending offer to peer');
+    pcSend.createOffer(setLocalAndSendMessage_Send, handleCreateOfferError);
+  } 
+  else if (message.message == 'are you in conversation') {
+    if (pcConversationReceive != null)
+      sendMessage({
+        nameFrom: name,
+        nameTo: message.nameFrom,
+        inConversation: 'true',
+        message: 'in conversation'});
+    else
+      sendMessage({
+        nameFrom: name,
+        nameTo: message.nameFrom,
+        inConversation: 'false',
+        message: 'in conversation'});
+  }
+  else if (message.message == 'in conversation') {
+    if (message.inConversation == 'true') {
+      document.getElementById("addNameError").hidden = true;
+      document.getElementById("addNameError2").hidden = true;
+      document.getElementById("addNameError3").hidden = true;
+      document.getElementById("addNameError5").hidden = true;
+      document.getElementById("addNameError4").hidden = false;
+      namesInConversation.pop();
+    } else if (message.inConversation == 'false')
+      if (numberConversation == 1) {
+        startSendingConversationSession();
+      }
+      else {
+        dataConversation = {
+          newNameAdded: 'true',
+          newNameLeaving: 'false',
+          newName: nameAdded,
+          number: (numberConversation+1),
+          counter: numberConversation};
+        sendConversationData();
+        startSendingConversationSession();
+      }
+  } 
+  else if (message.message == 'want names in conversation') {
+    sendMessage({
+      nameTo: message.nameFrom,
+      nameFrom: name,
+      names: namesInConversation,
+      message: 'names in conversation'});
+  }
+  else if (message.message == 'names in conversation') {
+    namesInConversation = message.names;
+  }
+  else if (message.message == 'want to add to conversation') {
+  // See README (II.C) to understand that all the condition are their to make sure
+  // that the adding operacion process is made well
+    if (numberConversation <= message.numberNames) {
+      numberConversation = message.numberNames;
+    }
+    if (message.nameToConnect == null) {
+      // verify the case first add, must be to avoid a loop for the first add
+      // if I am the first name addded I will start a sendingSession with message.nameFrom
+      if (numberConversation == 1) {
+        nameAdded = message.nameFrom;
+        namesInConversation.push(nameAdded);
+        startSendingConversationSession();
+      }
+      // In all case I will start the receivingSession, the test is only to avoid the name which has
+      // initiate the first add to restart a sending session (if he does it, it will be a loop)
+      nameBeforeConversation = message.nameFrom;
+      startReceivingConversationSession();
+    } 
+    // again here we avoid a loop in the insertion of a new name, only the new name (nameToConnect == nameNextConversation != null)
+    // has to start the sendingSession (the name already in the conversation will receive a message with nameToConnect = nameNextConversation == null)
+    else if (message.nameToConnect != null) {
+      nameAdded = message.nameToConnect;
+      startSendingConversationSession();
+      nameBeforeConversation = message.nameFrom;
+      startReceivingConversationSession();
+    }
+  }
+  else if (message.message == 'ready for conversation') {
+    nameNextConversation = message.nameFrom;
+    console.log('Sending offer to peer');
+    pcConversationSend.createOffer(setLocalAndSendMessage_ConversationSend, handleCreateOfferError);
+  }
+  else if (message.message == 'leaving the conversation') {
+    if (message.nameFrom == null) {
+      leavingProcedure();
+    } else if (message.nameFrom == nameBeforeConversation) {
+      dataConversation = {
+          newNameAdded: 'false',
+          newNameLeaving: 'true',
+          newName: message.nameFrom,
+          counter: (numberConversation-1)};
+      sendConversationData();
+      sendMessage({
+        nameTo: message.nameFrom,
+        nameFrom: name,
+        message: 'you can leave'});
+    } else if (message.nameFrom == nameNextConversation) {
+      nameNextConversation = null;
+      nameAdded = message.nameToConnect;
+      numberConversation = numberConversation - 1;
+      startSendingConversationSession();
+    }
+  }
+  else if (message.message == 'you can leave') {
+    sendMessage({
+        nameTo: nameBeforeConversation,
+        nameFrom: name,
+        nameToConnect: nameNextConversation,
+        message: 'leaving the conversation'});
+    leavingProcedure();
+  }
+  else if (message.type === 'offer') {
+    if (message.conversation === 'false') {
+      pcReceive.setRemoteDescription(new RTCSessionDescription(message.message));
+      console.log('Sending answer to peer');
+      pcReceive.createAnswer(setLocalAndSendMessage_Receive, handleCreateAnswerError);
+    } else if (message.conversation === 'true') {
+      pcConversationReceive.setRemoteDescription(new RTCSessionDescription(message.message));
+      console.log('Sending answer to peer');
+      pcConversationReceive.createAnswer(setLocalAndSendMessage_ConversationReceive, handleCreateAnswerError);
+    }
+  } 
+  else if (message.type === 'answer') {
+    if (message.conversation === 'false')
+      pcSend.setRemoteDescription(new RTCSessionDescription(message.message));
+    else if (message.conversation === 'true') {
+      pcConversationSend.setRemoteDescription(new RTCSessionDescription(message.message));
+    }
+  } 
+  else if (message.type === 'candidate') {
+    var candidate = new RTCIceCandidate({
+      sdpMLineIndex: message.label,
+      candidate: message.candidate
+    });
+    if (message.sender === 'true')
+      if (message.conversation === 'true')
+        pcConversationReceive.addIceCandidate(candidate);
+      else
+        pcReceive.addIceCandidate(candidate);
+    else if (message.sender === 'false')
+      if (message.conversation === 'true')
+        pcConversationSend.addIceCandidate(candidate);
+      else
+        pcSend.addIceCandidate(candidate);
+  }
+});
+
+function requestTurn(turn_url) {
+  var turnExists = false;
+  for (var i in pc_config.iceServers) {
+    if (pc_config.iceServers[i].url.substr(0, 5) === 'turn:') {
+      turnExists = true;
+      turnReady = true;
+      break;
+    }
+  }
+  if (!turnExists) {
+    console.log('Getting TURN server from ', turn_url);
+    // No TURN server. Get one from computeengineondemand.appspot.com:
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function(){
+      if (xhr.readyState === 4 && xhr.status === 200) {
+        var turnServer = JSON.parse(xhr.responseText);
+        console.log('Got TURN server: ', turnServer);
+        pc_config.iceServers.push({
+          'url': 'turn:' + turnServer.username + '@' + turnServer.turn,
+          'credential': turnServer.password
+        });
+        turnReady = true;
+      }
+    };
+    xhr.open('GET', turn_url, true);
+    xhr.send();
+  }
+}
+
+//////////////////////////////////////
+// see README (II.B)
+//sendContenair div implementation, all the webRTC exanging messages and function
+
+var nameToSendInput = document.getElementById("nameToSend");
+var startSendSession = document.getElementById("startSendSession");
+var sendMessageButton = document.getElementById("sendMessageButton");
+var messageToSend = document.getElementById("messageToSend");
+messageToSend.value = "Press Start Sending, enter some text, then press Send.";
+nameToSendInput.value = "";
+messageToSend.disabled = true;
+sendMessageButton.disabled = true;
+startSendSession.onclick = startSendingSession;
+sendMessageButton.onclick = sendMessageData;
+
+function startSendingSession() {
+	nameToSend = nameToSendInput.value;
+	if (nameToSend == "" || nameToSend == name) {
+		document.getElementById("nameToSendError2").hidden = true;
+		document.getElementById("nameToSendError1").hidden = false;
+		return;
+	}
+	if (!nameList.inArray(nameToSend)) {
+		document.getElementById("nameToSendError1").hidden = true;
+		document.getElementById("nameToSendError2").hidden = false;
+		return;
+	}
+	document.getElementById("nameToSendError1").hidden = true;
+	document.getElementById("nameToSendError2").hidden = true;
+	trace("starting sending session")
+	if (pcSend != null) {
+		sendChannel.close();
+		pcSend.close();
+		pcSend = null;
+	}
+	try {
+    	pcSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+    	pcSend.onicecandidate = handleIceCandidate_Send;
+    	trace('Created RTCPeerConnection');
+  		try {
+    		// Reliable Data Channels not yet supported in Chrome
+    		sendChannel = pcSend.createDataChannel("sendDataChannel", {reliable: false});
+   			trace('Created send data channel');
+  		} catch (e) {
+    		alert('Failed to create data channel. ' +
+        		  'You need Chrome M25 or later with RtpDataChannel enabled');
+    		trace('createDataChannel() failed with exception: ' + e.message);
+    		return;
+  		}
+  		sendChannel.onopen = handleSendChannelStateChange;
+  		sendChannel.onclose = handleSendChannelStateChange;
+  	} catch (e) {
+  		trace('Failed to create PeerConnection, exception: ' + e.message);
+    	alert('Cannot create RTCPeerConnection object.');
+    	return;
+  	}
+	sendMessage({
+		message: 'want to send message', 
+		nameFrom: name,
+		nameTo: nameToSend});
+}
+
+function startReceivingSession() {
+	if (pcReceive != null) {
+		receiveChannel.close()
+		receiveChannel = null;
+		pcReceive.close();
+		pcReceive = null;
+	}
+	try {
+    	pcReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+    	pcReceive.onicecandidate = handleIceCandidate_Receive;
+  		pcReceive.ondatachannel = gotReceiveChannel;
+  		trace('Created RTCPeerConnection');
+  	} catch (e) {
+  		trace('Failed to create PeerConnection, exception: ' + e.message);
+    	alert('Cannot create RTCPeerConnection object.');
+    	return;
+  	}
+  	sendMessage({
+  		message: 'ready to receive',
+  		nameFrom: name,
+  		nameTo: nameSender});
+}
+
+function sendMessageData() {
+  var data = {
+    type: 'message',
+    message: messageToSend.value};
+  sendChannel.send(JSON.stringify(data));
+  trace('Sent data: ' + data);
+}
+
+function gotReceiveChannel(event) {
+  trace('Receive Channel Callback');
+  receiveChannel = event.channel;
+  receiveChannel.onmessage = handleMessage;
+  receiveChannel.onopen = handleReceiveChannelStateChange;
+  receiveChannel.onclose = handleReceiveChannelStateChange;
+}
+
+function setLocalAndSendMessage_Send(sessionDescription) {
+  pcSend.setLocalDescription(sessionDescription);
+  console.log('setLocalAndSendMessage sending message' , sessionDescription);
+  socket.emit('message', {
+  	nameTo: nameToSend,
+  	type: 'offer',
+  	conversation: 'false',
+  	message: sessionDescription});
+}
+
+function setLocalAndSendMessage_Receive(sessionDescription) {
+  pcReceive.setLocalDescription(sessionDescription);
+  console.log('setLocalAndSendMessage sending message' , sessionDescription);
+  socket.emit('message', {
+  	nameTo: nameSender,
+  	type: 'answer',
+  	conversation: 'false',
+  	message: sessionDescription});
+}
+
+function handleMessage(event) {
+  trace('Received message: ' + event.data);
+  document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
+  document.getElementById("messageReceived").value = event.data;
+}
+
+/*function handleImage(event) {
+  var total, count, parts;
+  trace('Received message: ' + event.data);
+    if (typeof event.data === 'string') {
+            total = parseInt(event.data);
+            parts = [];
+            count = 0;
+            console.log('Expecting a total of ' + total + ' bytes');
+        } else {
+
+        parts.push(event.data);
+        count += event.data.size;
+        console.log('Got ' + event.data.size + ' byte(s), ' + (total - count) + ' to go.');
+
+        if (count == total) {
+            console.log('Assembling payload')
+            var buffer = new Uint8ClampedArray(total);
+            var compose = function(i, pos) {
+                var reader = new FileReader();
+                reader.onload = function() { 
+                    buffer.set(new Uint8ClampedArray(this.result), pos);
+                    if (i + 1 == parts.length) {
+                        console.log('Done. Rendering photo.');
+                        renderPhoto(buffer);
+                    } else {
+                        compose(i + 1, pos + this.result.byteLength);
+                    }
+                };
+                reader.readAsArrayBuffer(parts[i]);
+            }
+            compose(0, 0);
+        }}
+}*/
+
+function handleSendChannelStateChange() {
+  var readyState = sendChannel.readyState;
+  trace('Send channel state is: ' + readyState);
+  if (readyState == "open") {
+    messageToSend.disabled = false;
+    messageToSend.focus();
+    messageToSend.value = "";
+    sendMessageButton.disabled = false;
+    imageInput.disabled = false;
+  } else {
+    messageToSend.disabled = true;
+    sendMessageButton.disabled = true;
+    imageInput.disabled = true;
+  }
+}
+
+function handleReceiveChannelStateChange() {
+  var readyState = receiveChannel.readyState;
+  trace('Receive channel state is: ' + readyState);
+}
+
+function handleCreateOfferError(event){
+  console.log('createOffer() error: ', event);
+}
+
+function handleCreateAnswerError(event){
+  console.log('createAnswer() error: ', event);
+}
+
+function handleIceCandidate_Send(event) {
+  console.log('handleIceCandidate event: ', event);
+  if (event.candidate) {
+    sendMessage({
+      nameTo: nameToSend,	
+      conversation: 'false',
+      sender: 'true',
+      type: 'candidate',
+      label: event.candidate.sdpMLineIndex,
+      id: event.candidate.sdpMid,
+      candidate: event.candidate.candidate});
+  } else {
+    console.log('End of candidates.');
+  }
+}
+
+function handleIceCandidate_Receive(event) {
+  console.log('handleIceCandidate event: ', event);
+  if (event.candidate) {
+    sendMessage({
+      nameTo: nameSender,
+      conversation: 'false',
+      sender: 'false',
+      type: 'candidate',
+      label: event.candidate.sdpMLineIndex,
+      id: event.candidate.sdpMid,
+      candidate: event.candidate.candidate});
+  } else {
+    console.log('End of candidates.');
+  }
+}
+
+//////////////////////////////////////
+// see README (II.C)
 // conversationContenair div implementation, again read README to understand to P2P network chosen
 var nameAddedInput = document.getElementById("nameAdded");
 var sendConversationMessageInput = document.getElementById("sendConversationMessage");
@@ -226,6 +650,7 @@ sendConversationMessageInput.value = "Press Add first";
 sendConversationMessageInput.disabled = true;
 namesInButton.disabled = true;
 leaveConversationButton.disabled = true;
+sendConversationButton.disabled = true;
 addNameButton.disabled = false;
 addNameButton.onclick = verifyNameAdded;
 sendConversationButton.onclick = makeItSenderAndSend;
@@ -357,6 +782,7 @@ function leavingProcedure() {
   document.getElementById("conversationNamesDiv").hidden = true;
   sendConversationMessageInput.value = "Press Add first";
   sendConversationMessageInput.disabled = true;
+  sendConversationButton.disabled = true;
   namesInButton.disabled = true;
   leaveConversationButton.disabled = true;
 
@@ -373,33 +799,33 @@ function leavingProcedure() {
 function startSendingConversationSession() {
   //verify to we havent yet a pcConversationSend (ie we are already in the conversation) and make it to
   // null if is the case (in order to add the new name which be connected to the new pcConversationSend)
-	if (pcConversationSend != null) {
+  if (pcConversationSend != null) {
     sendChannel_Conversation.close();
     sendChannel_Conversation = null;
     pcConversationSend.close();
     pcConversationSend = null;
   }
-	try {
-  	pcConversationSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
-  	pcConversationSend.onicecandidate = handleIceCandidate_ConversationSend;
-  	trace('Created RTCPeerConnection');
-  	try {
-  		// Reliable Data Channels not yet supported in Chrome
-  		sendChannel_Conversation = pcConversationSend.createDataChannel("sendDataChannel", {reliable: false});
-  		trace('Created send data channel');
-   		} catch (e) {
-   		alert('Failed to create data channel. ' +
-     			  'You need Chrome M25 or later with RtpDataChannel enabled');
-   		trace('createDataChannel() failed with exception: ' + e.message);
-   		return;
-    	}
-  	 	sendChannel_Conversation.onopen = handleSendChannelStateChange_Conversation;
-  	  sendChannel_Conversation.onclose = handleSendChannelStateChange_Conversation;
-  	} catch (e) {
+  try {
+    pcConversationSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+    pcConversationSend.onicecandidate = handleIceCandidate_ConversationSend;
+    trace('Created RTCPeerConnection');
+    try {
+      // Reliable Data Channels not yet supported in Chrome
+      sendChannel_Conversation = pcConversationSend.createDataChannel("sendDataChannel", {reliable: false});
+      trace('Created send data channel');
+      } catch (e) {
+      alert('Failed to create data channel. ' +
+            'You need Chrome M25 or later with RtpDataChannel enabled');
+      trace('createDataChannel() failed with exception: ' + e.message);
+      return;
+      }
+      sendChannel_Conversation.onopen = handleSendChannelStateChange_Conversation;
+      sendChannel_Conversation.onclose = handleSendChannelStateChange_Conversation;
+    } catch (e) {
       trace('Failed to create PeerConnection, exception: ' + e.message);
-    	alert('Cannot create RTCPeerConnection object.');
-    	return;
-  	}
+      alert('Cannot create RTCPeerConnection object.');
+      return;
+    }
     sendMessage({
       nameFrom: name,
       nameTo: nameAdded,
@@ -416,20 +842,20 @@ function startReceivingConversationSession() {
     pcConversationReceive.close();
     pcConversationReceive = null;
   }
-	try {
-    	pcConversationReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
-    	pcConversationReceive.onicecandidate = handleIceCandidate_ConversationReceive;
-  		pcConversationReceive.ondatachannel = gotReceiveChannel_Conversation;
-  		trace('Created RTCPeerConnection');
-  	} catch (e) {
-  		trace('Failed to create PeerConnection, exception: ' + e.message);
-    	alert('Cannot create RTCPeerConnection object.');
-    	return;
-  	}
-  	sendMessage({
-  		nameFrom: name,
-  		nameTo: nameBeforeConversation,
-  		message: 'ready for conversation'});
+  try {
+      pcConversationReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+      pcConversationReceive.onicecandidate = handleIceCandidate_ConversationReceive;
+      pcConversationReceive.ondatachannel = gotReceiveChannel_Conversation;
+      trace('Created RTCPeerConnection');
+    } catch (e) {
+      trace('Failed to create PeerConnection, exception: ' + e.message);
+      alert('Cannot create RTCPeerConnection object.');
+      return;
+    }
+    sendMessage({
+      nameFrom: name,
+      nameTo: nameBeforeConversation,
+      message: 'ready for conversation'});
 }
 
 function sendConversationData() {
@@ -470,7 +896,7 @@ function sendConversationData() {
 function gotReceiveChannel_Conversation(event) {
   trace('Receive Channel Callback');
   receiveChannel_Conversation = event.channel;
-  receiveChannel_Conversation.onmessage = handleMessage_Conversation;
+  receiveChannel_Conversation.onmessage = handleData_Conversation;
   receiveChannel_Conversation.onopen = handleReceiveChannelStateChange_Conversation;
   receiveChannel_Conversation.onclose = handleReceiveChannelStateChange_Conversation;
 }
@@ -479,23 +905,23 @@ function setLocalAndSendMessage_ConversationSend(sessionDescription) {
   pcConversationSend.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
   socket.emit('message', {
-  	nameTo: nameNextConversation,
-  	type: 'offer',
-  	conversation: 'true',
-  	message: sessionDescription});
+    nameTo: nameNextConversation,
+    type: 'offer',
+    conversation: 'true',
+    message: sessionDescription});
 }
 
 function setLocalAndSendMessage_ConversationReceive(sessionDescription) {
   pcConversationReceive.setLocalDescription(sessionDescription);
   console.log('setLocalAndSendMessage sending message' , sessionDescription);
   socket.emit('message', {
-  	nameTo: nameBeforeConversation,
-  	type: 'answer',
-  	conversation: 'true',
-  	message: sessionDescription});
+    nameTo: nameBeforeConversation,
+    type: 'answer',
+    conversation: 'true',
+    message: sessionDescription});
 }
 
-function handleMessage_Conversation(event) {
+function handleData_Conversation(event) {
   trace('Received message: ' + event.data);
   dataConversation = JSON.parse(event.data);
   if (dataConversation.newNameAdded == 'true') {
@@ -512,6 +938,7 @@ function handleSendChannelStateChange_Conversation() {
   trace('Send channel conversation state is: ' + readyState);
   if (readyState == "open") {
     sendConversationMessageInput.disabled = false;
+    sendConversationButton.disabled = false;
     namesInButton.disabled = false;
     leaveConversationButton.disabled = false;
     sendConversationMessageInput.focus();
@@ -567,381 +994,136 @@ function handleIceCandidate_ConversationReceive(event) {
 }
 
 //////////////////////////////////////
-// messageContenair div implementation, all the webRTC exanging messages and function
+// see README (II.D)
 
-// utility function to follow exange of messaging with the server
-function sendMessage(message){
-	console.log('Client sending message: ', message);
-  	socket.emit('message', message);
+var allowedImageTypes = ['png', 'jpg', 'gif'];
+var imageInput = document.getElementById('imageInput');
+var sendImageButton = document.getElementById('sendImageButton');
+var canvas = document.getElementById('photo').getContext('2d');
+var canvasWidth = 200;
+var canvasHeight = 150;
+sendImageButton.disabled = true;
+imageInput.disabled = true;
+imageInput.value = "";
+imageInput.onchange = verifyImageFile;
+sendImageButton.onclick = sendImageData;
+
+function verifyImageFile() {
+  var reader = new FileReader();
+  reader.onload = function() {
+    document.getElementById('imageForCanvas').src = this.result;
+  }
+  image = imageInput.files[0];
+  var imageType = image.name.split('.');
+  imageType = imageType[imageType.length - 1].toLowerCase();
+  if(!allowedImageTypes.inArray(imageType)) {
+    imageInput.value = "";
+    document.getElementById("imageTypeError").hidden = false;
+  }
+  else {
+    document.getElementById("imageTypeError").hidden = true;
+    sendImageButton.disabled = false;
+    reader.readAsDataURL(image);
+  }
 }
 
-// again, be sure to have red README (II.B) to understand to normal stack exange of messages
-socket.on('message', function (message){
-  console.log('Client received message:', message);
-  if (message.message == 'want to send message') {
-  		nameSender = message.nameFrom;
-  		startReceivingSession();
-  }  
-  else if (message.message == 'ready to receive') {
-  	nameToSend = message.nameFrom;
-  	console.log('Sending offer to peer');
-  	pcSend.createOffer(setLocalAndSendMessage_Send, handleCreateOfferError);
-  } 
-  else if (message.message == 'are you in conversation') {
-  	if (pcConversationReceive != null)
-  		sendMessage({
-  			nameFrom: name,
-			  nameTo: message.nameFrom,
-        inConversation: 'true',
-			  message: 'in conversation'});
-    else
-      sendMessage({
-        nameFrom: name,
-        nameTo: message.nameFrom,
-        inConversation: 'false',
-        message: 'in conversation'});
-  }
-  else if (message.message == 'in conversation') {
-    if (message.inConversation == 'true') {
-	    document.getElementById("addNameError").hidden = true;
-	    document.getElementById("addNameError2").hidden = true;
-	    document.getElementById("addNameError3").hidden = true;
-      document.getElementById("addNameError5").hidden = true;
-	    document.getElementById("addNameError4").hidden = false;
-      namesInConversation.pop();
-    } else if (message.inConversation == 'false')
-      if (numberConversation == 1) {
-        startSendingConversationSession();
-      }
-      else {
-        dataConversation = {
-          newNameAdded: 'true',
-          newNameLeaving: 'false',
-          newName: nameAdded,
-          number: (numberConversation+1),
-          counter: numberConversation};
-        sendConversationData();
-        startSendingConversationSession();
-      }
-  } 
-  else if (message.message == 'want names in conversation') {
-    sendMessage({
-      nameTo: message.nameFrom,
-      nameFrom: name,
-      names: namesInConversation,
-      message: 'names in conversation'});
-  }
-  else if (message.message == 'names in conversation') {
-    namesInConversation = message.names;
-  }
-  else if (message.message == 'want to add to conversation') {
-  // See README (II.C) to understand that all the condition are their to make sure
-  // that the adding operacion process is made well
-    if (numberConversation <= message.numberNames) {
-      numberConversation = message.numberNames;
-    }
-    if (message.nameToConnect == null) {
-      // verify the case first add, must be to avoid a loop for the first add
-      // if I am the first name addded I will start a sendingSession with message.nameFrom
-      if (numberConversation == 1) {
-        nameAdded = message.nameFrom;
-        namesInConversation.push(nameAdded);
-        startSendingConversationSession();
-      }
-      // In all case I will start the receivingSession, the test is only to avoid the name which has
-      // initiate the first add to restart a sending session (if he does it, it will be a loop)
-      nameBeforeConversation = message.nameFrom;
-      startReceivingConversationSession();
-    } 
-    // again here we avoid a loop in the insertion of a new name, only the new name (nameToConnect == nameNextConversation != null)
-    // has to start the sendingSession (the name already in the conversation will receive a message with nameToConnect = nameNextConversation == null)
-    else if (message.nameToConnect != null) {
-      nameAdded = message.nameToConnect;
-      startSendingConversationSession();
-      nameBeforeConversation = message.nameFrom;
-      startReceivingConversationSession();
-    }
-  }
-  else if (message.message == 'ready for conversation') {
-   	nameNextConversation = message.nameFrom;
-   	console.log('Sending offer to peer');
-   	pcConversationSend.createOffer(setLocalAndSendMessage_ConversationSend, handleCreateOfferError);
-  }
-  else if (message.message == 'leaving the conversation') {
-    if (message.nameFrom == null) {
-      leavingProcedure();
-    } else if (message.nameFrom == nameBeforeConversation) {
-      dataConversation = {
-          newNameAdded: 'false',
-          newNameLeaving: 'true',
-          newName: message.nameFrom,
-          counter: (numberConversation-1)};
-      sendConversationData();
-      sendMessage({
-        nameTo: message.nameFrom,
-        nameFrom: name,
-        message: 'you can leave'});
-    } else if (message.nameFrom == nameNextConversation) {
-      nameNextConversation = null;
-      nameAdded = message.nameToConnect;
-      numberConversation = numberConversation - 1;
-      startSendingConversationSession();
-    }
-  }
-  else if (message.message == 'you can leave') {
-    sendMessage({
-        nameTo: nameBeforeConversation,
-        nameFrom: name,
-        nameToConnect: nameNextConversation,
-        message: 'leaving the conversation'});
-    leavingProcedure();
-  }
-  else if (message.type === 'offer') {
-  	if (message.conversation === 'false') {
-   		pcReceive.setRemoteDescription(new RTCSessionDescription(message.message));
-   		console.log('Sending answer to peer');
-  		pcReceive.createAnswer(setLocalAndSendMessage_Receive, handleCreateAnswerError);
-  	} else if (message.conversation === 'true') {
-  		pcConversationReceive.setRemoteDescription(new RTCSessionDescription(message.message));
-   		console.log('Sending answer to peer');
-  		pcConversationReceive.createAnswer(setLocalAndSendMessage_ConversationReceive, handleCreateAnswerError);
-  	}
-  } 
-  else if (message.type === 'answer') {
-  	if (message.conversation === 'false')
-    	pcSend.setRemoteDescription(new RTCSessionDescription(message.message));
-    else if (message.conversation === 'true') {
-      pcConversationSend.setRemoteDescription(new RTCSessionDescription(message.message));
-    }
-  } 
-  else if (message.type === 'candidate') {
-    var candidate = new RTCIceCandidate({
-      sdpMLineIndex: message.label,
-      candidate: message.candidate
-    });
-    if (message.sender === 'true')
-      if (message.conversation === 'true')
-        pcConversationReceive.addIceCandidate(candidate);
-      else
-    	  pcReceive.addIceCandidate(candidate);
-    else if (message.sender === 'false')
-      if (message.conversation === 'true')
-        pcConversationSend.addIceCandidate(candidate);
-      else
-        pcSend.addIceCandidate(candidate);
-  }
-});
+function sendImageData() {
+  sendMessageButton.disabled = true;
 
-// connection free STUN TURN Server google
-if (location.hostname != "localhost") {
-  requestTurn('https://computeengineondemand.appspot.com/turn?username=41784574&key=4080218913');
-}
+  canvas.drawImage(document.getElementById('imageForCanvas'), 0, 0, canvasWidth, canvasHeight);
+  // Split data channel message in chunks of this byte length.
+  var CHUNK_LEN = 64000;
 
-var nameToSendInput = document.getElementById("nameToSend");
-var startSendSession = document.getElementById("startSendSession");
-var sendButton = document.getElementById("sendButton");
-var messageToSend = document.getElementById("messageToSend");
-messageToSend.value = "Press Start Sending, enter some text, then press Send.";
-nameToSendInput.value = "";
-messageToSend.disabled = true;
-sendButton.disabled = true;
-startSendSession.onclick = startSendingSession;
-sendButton.onclick = sendData;
+  image = canvas.getImageData(0, 0, canvasWidth, canvasHeight);
+  var length = image.data.byteLength;
+  var n = length / CHUNK_LEN | 0;
 
-function startSendingSession() {
-	nameToSend = nameToSendInput.value;
-	if (nameToSend == "" || nameToSend == name) {
-		document.getElementById("nameToSendError2").hidden = true;
-		document.getElementById("nameToSendError1").hidden = false;
-		return;
-	}
-	if (!nameList.inArray(nameToSend)) {
-		document.getElementById("nameToSendError1").hidden = true;
-		document.getElementById("nameToSendError2").hidden = false;
-		return;
-	}
-	document.getElementById("nameToSendError1").hidden = true;
-	document.getElementById("nameToSendError2").hidden = true;
-	trace("starting sending session")
-	if (pcSend != null) {
-		sendChannel.close();
-		pcSend.close();
-		pcSend = null;
-	}
-	try {
-    	pcSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
-    	pcSend.onicecandidate = handleIceCandidate_Send;
-    	trace('Created RTCPeerConnection');
-  		try {
-    		// Reliable Data Channels not yet supported in Chrome
-    		sendChannel = pcSend.createDataChannel("sendDataChannel", {reliable: false});
-   			trace('Created send data channel');
-  		} catch (e) {
-    		alert('Failed to create data channel. ' +
-        		  'You need Chrome M25 or later with RtpDataChannel enabled');
-    		trace('createDataChannel() failed with exception: ' + e.message);
-    		return;
-  		}
-  		sendChannel.onopen = handleSendChannelStateChange;
-  		sendChannel.onclose = handleSendChannelStateChange;
-  	} catch (e) {
-  		trace('Failed to create PeerConnection, exception: ' + e.message);
-    	alert('Cannot create RTCPeerConnection object.');
-    	return;
-  	}
-	sendMessage({
-		message: 'want to send message', 
-		nameFrom: name,
-		nameTo: nameToSend});
-}
-
-function startReceivingSession() {
-	if (pcReceive != null) {
-		receiveChannel.close()
-		receiveChannel = null;
-		pcReceive.close();
-		pcReceive = null;
-	}
-	try {
-    	pcReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
-    	pcReceive.onicecandidate = handleIceCandidate_Receive;
-  		pcReceive.ondatachannel = gotReceiveChannel;
-  		trace('Created RTCPeerConnection');
-  	} catch (e) {
-  		trace('Failed to create PeerConnection, exception: ' + e.message);
-    	alert('Cannot create RTCPeerConnection object.');
-    	return;
-  	}
-  	sendMessage({
-  		message: 'ready to receive',
-  		nameFrom: name,
-  		nameTo: nameSender});
-}
-
-function sendData() {
-  var data = messageToSend.value;
+  trace('Sending a total of ' + length + ' byte(s)');
+  var data = {
+    type: 'image',
+    length: 'true',
+    message: length};
+  data = JSON.stringify(data)
   sendChannel.send(data);
-  trace('Sent data: ' + data);
-}
+  //sendChannel.send(length);
+  //trace('Sent data: ' + data);
 
-function gotReceiveChannel(event) {
-  trace('Receive Channel Callback');
-  receiveChannel = event.channel;
-  receiveChannel.onmessage = handleMessage;
-  receiveChannel.onopen = handleReceiveChannelStateChange;
-  receiveChannel.onclose = handleReceiveChannelStateChange;
-}
-
-function setLocalAndSendMessage_Send(sessionDescription) {
-  pcSend.setLocalDescription(sessionDescription);
-  console.log('setLocalAndSendMessage sending message' , sessionDescription);
-  socket.emit('message', {
-  	nameTo: nameToSend,
-  	type: 'offer',
-  	conversation: 'false',
-  	message: sessionDescription});
-}
-
-function setLocalAndSendMessage_Receive(sessionDescription) {
-  pcReceive.setLocalDescription(sessionDescription);
-  console.log('setLocalAndSendMessage sending message' , sessionDescription);
-  socket.emit('message', {
-  	nameTo: nameSender,
-  	type: 'answer',
-  	conversation: 'false',
-  	message: sessionDescription});
-}
-
-function handleMessage(event) {
-  trace('Received message: ' + event.data);
-  document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
-  document.getElementById("messageReceived").value = event.data;
-}
-
-function handleSendChannelStateChange() {
-  var readyState = sendChannel.readyState;
-  trace('Send channel state is: ' + readyState);
-  if (readyState == "open") {
-    messageToSend.disabled = false;
-    messageToSend.focus();
-    messageToSend.value = "";
-    sendButton.disabled = false;
-  } else {
-    messageToSend.disabled = true;
-    sendButton.disabled = true;
-  }
-}
-
-function handleReceiveChannelStateChange() {
-  var readyState = receiveChannel.readyState;
-  trace('Receive channel state is: ' + readyState);
-}
-
-function handleCreateOfferError(event){
-  console.log('createOffer() error: ', event);
-}
-
-function handleCreateAnswerError(event){
-  console.log('createAnswer() error: ', event);
-}
-
-function handleIceCandidate_Send(event) {
-  console.log('handleIceCandidate event: ', event);
-  if (event.candidate) {
-    sendMessage({
-      nameTo: nameToSend,	
-      conversation: 'false',
-      sender: 'true',
-      type: 'candidate',
-      label: event.candidate.sdpMLineIndex,
-      id: event.candidate.sdpMid,
-      candidate: event.candidate.candidate});
-  } else {
-    console.log('End of candidates.');
-  }
-}
-
-function handleIceCandidate_Receive(event) {
-  console.log('handleIceCandidate event: ', event);
-  if (event.candidate) {
-    sendMessage({
-      nameTo: nameSender,
-      conversation: 'false',
-      sender: 'false',
-      type: 'candidate',
-      label: event.candidate.sdpMLineIndex,
-      id: event.candidate.sdpMid,
-      candidate: event.candidate.candidate});
-  } else {
-    console.log('End of candidates.');
-  }
-}
-
-function requestTurn(turn_url) {
-  var turnExists = false;
-  for (var i in pc_config.iceServers) {
-    if (pc_config.iceServers[i].url.substr(0, 5) === 'turn:') {
-      turnExists = true;
-      turnReady = true;
-      break;
+  // split the photo and send in chunks of about 64KB
+    for (var i = 0; i < n; i++) {
+        var start = i * CHUNK_LEN,
+            end = (i+1) * CHUNK_LEN;
+        trace(start + ' - ' + (end-1));
+        var data = {
+          type: 'image',
+          length: 'false',
+          message: image.data.subarray(start, end)};
+        data = JSON.stringify(data)
+        sendChannel.send(data);
+        //sendChannel.send(image.data.subarray(start, end));
+        //trace('Sent data: ' + data);
     }
-  }
-  if (!turnExists) {
-    console.log('Getting TURN server from ', turn_url);
-    // No TURN server. Get one from computeengineondemand.appspot.com:
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function(){
-      if (xhr.readyState === 4 && xhr.status === 200) {
-        var turnServer = JSON.parse(xhr.responseText);
-      	console.log('Got TURN server: ', turnServer);
-        pc_config.iceServers.push({
-          'url': 'turn:' + turnServer.username + '@' + turnServer.turn,
-          'credential': turnServer.password
-        });
-        turnReady = true;
-      }
-    };
-    xhr.open('GET', turn_url, true);
-    xhr.send();
-  }
+
+    // send the reminder, if any
+    if (length % CHUNK_LEN) {
+        trace('last ' + length % CHUNK_LEN + ' byte(s)');
+        var data = {
+          type: 'image',
+          length: 'false',
+          message: image.data.subarray(n * CHUNK_LEN)};
+        data = JSON.stringify(data)
+        //sendChannel.send(image.data.subarray(n * CHUNK_LEN));
+        sendChannel.send(data);
+        //trace('Sent data: ' + data);
+    }
+}
+
+/*
+function receiveDataFirefoxFactory() {
+    var count, total, parts;
+
+    return function onmessage(event) {
+        if (typeof event.data === 'string') {
+            total = parseInt(event.data);
+            parts = [];
+            count = 0;
+            console.log('Expecting a total of ' + total + ' bytes');
+            return;
+        }
+
+        parts.push(event.data);
+        count += event.data.size;
+        console.log('Got ' + event.data.size + ' byte(s), ' + (total - count) + ' to go.');
+
+        if (count == total) {
+            console.log('Assembling payload')
+            var buf = new Uint8ClampedArray(total);
+            var compose = function(i, pos) {
+                var reader = new FileReader();
+                reader.onload = function() { 
+                    buf.set(new Uint8ClampedArray(this.result), pos);
+                    if (i + 1 == parts.length) {
+                        console.log('Done. Rendering photo.');
+                        renderPhoto(buf);
+                    } else {
+                        compose(i + 1, pos + this.result.byteLength);
+                    }
+                };
+                reader.readAsArrayBuffer(parts[i]);
+            }
+            compose(0, 0);
+        }
+    }
+}
+
+var img = canvas.getImageData(0, 0, canvasWidth, canvasHeight),
+        len = img.data.byteLength,
+        n = len / CHUNK_LEN | 0;
+*/
+function renderPhoto(data) {
+    var photo = document.getElementById('photo')
+
+    var canvas = photo.getContext('2d');
+    img = canvas.createImageData(300, 150);
+    img.data.set(data);
+    canvas.putImageData(img, 0, 0);
 }
