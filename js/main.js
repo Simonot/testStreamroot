@@ -20,6 +20,8 @@ var nameNextConversation = null;
 var nameBeforeConversation;
 var dataConversation;
 var isConversationSender = false;
+var namesInConversation = [];
+var numberDivNamesConversation = 0;
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
@@ -80,6 +82,7 @@ function nameClientAdd() {
 		nameToSendInput.disabled = false;
 		nameList.push(name);
 		socket.emit('new client connected', name);
+    namesInConversation.push(name);
 	}
 }
 
@@ -167,16 +170,20 @@ var nameAddedInput = document.getElementById("nameAdded");
 var sendConversationMessageInput = document.getElementById("sendConversationMessage");
 var addNameButton = document.getElementById("addNameButton");
 var sendConversationButton = document.getElementById("sendConversationButton");
+var namesInButton = document.getElementById("namesInButton");
+document.getElementById("inConversation").hidden = true;
 nameAddedInput.value = "";
 sendConversationMessageInput.value = "";
 sendConversationMessageInput.value = "add first";
 sendConversationMessageInput.disabled = true;
+namesInButton.disabled = true;
 addNameButton.disabled = false;
 addNameButton.onclick = verifyNameAdded;
 sendConversationButton.onclick = makeItSenderAndSend;
+namesInButton.onclick = displayNamesConversation;
 
+// initiate the 10 div contening the messages of the conversation
 var conversationMessageDiv, pseudoSpanConversation, messageSpanConversation;
-
 for(var i = 0; i < 10; i++) {
   conversationMessageDiv = document.createElement('div');
   pseudoSpanConversation = document.createElement('span');
@@ -221,6 +228,7 @@ function verifyNameAdded() {
       document.getElementById("addNameError5").hidden = true;
       document.getElementById("addNameError3").hidden = false;
     } else {
+      namesInConversation.push(nameAdded);
       sendMessage({
         nameTo: nameAdded,
         nameFrom: name,
@@ -230,14 +238,9 @@ function verifyNameAdded() {
 }
 
 function startSendingConversationSession() {
+  //verify to we havent yet a pcConversationSend (ie we are already in the conversation) and make it to
+  // null if is the case (in order to add the new name which be connected to the new pcConversationSend)
 	if (pcConversationSend != null) {
-    // new member add, we have to tell it to the others names of the conversation
-    //dataConversation = {
-    //  newNameAdded: 'true',
-    //  number: (numberConversation+1),
-    //  counter: numberConversation};
-    //sendConversationData();
-    // now we close the pcConversationSend and we then initilize it with the new name
     sendChannel_Conversation.close();
     sendChannel_Conversation = null;
     pcConversationSend.close();
@@ -311,7 +314,6 @@ function sendConversationData() {
     isConversationSender = false;
     sendConversationMessageInput.value = "";
   }
-  trace('initial counter ' + dataConversation.counter);
   if (dataConversation.newNameAdded == 'false')
     displayConversationMessage(dataConversation.nameSender, dataConversation.message);
   dataConversation.counter = dataConversation.counter - 1;
@@ -323,17 +325,31 @@ function sendConversationData() {
 }
 
 function displayConversationMessage(pseudo, message) {
+  // display the 10 last message of the conversation
   var currentDiv = document.getElementById("conversationMessages").lastChild;
   for(var i = 0; i < 9; i++) {
     currentDiv = currentDiv.previousSibling;
     currentDiv.nextSibling.firstChild.innerHTML = currentDiv.firstChild.innerHTML;
     currentDiv.nextSibling.lastChild.innerHTML =  currentDiv.lastChild.innerHTML;
     }
-  //currentDiv = currentDiv.nextSibling;
 
   currentDiv.firstChild.innerHTML = pseudo;
   currentDiv.lastChild.innerHTML = message;
-  //document.getElementById("conversationMessages").innerHTML = message;
+}
+
+function displayNamesConversation() {
+  trace(namesInConversation.length);
+  var conversationNames = document.getElementById("conversationNames");
+  conversationNames.removeChild(document.getElementById("conversationNamesDiv"));
+  
+  var conversationNamesDiv = document.createElement('div');
+  conversationNamesDiv.id = "conversationNamesDiv";
+  conversationNames.appendChild(conversationNamesDiv)
+  for(var i=0;  i < namesInConversation.length; i++) {
+    NameDiv = document.createElement('div');
+    NameDiv.innerHTML = '  - ' + namesInConversation[i];
+    document.getElementById("conversationNamesDiv").appendChild(NameDiv);
+  }
 }
 
 function gotReceiveChannel_Conversation(event) {
@@ -369,8 +385,12 @@ function handleMessage_Conversation(event) {
   dataConversation = JSON.parse(event.data);
   trace('data counter ' + dataConversation.counter);
   trace('data message ' + dataConversation.message);
-  if (dataConversation.newNameAdded == 'true')
+  if (dataConversation.newNameAdded == 'true') {
     numberConversation = dataConversation.number;
+    document.getElementById("conversationNamesDiv").hidden = true;
+    if( !(namesInConversation.inArray(dataConversation.newName)) )
+      namesInConversation.push(dataConversation.newName);
+  }
   sendConversationData();
 }
 
@@ -379,8 +399,17 @@ function handleSendChannelStateChange_Conversation() {
   trace('Send channel conversation state is: ' + readyState);
   if (readyState == "open") {
     sendConversationMessageInput.disabled = false;
+    namesInButton.disabled = false;
     sendConversationMessageInput.focus();
     sendConversationMessageInput.value = "";
+    nameAddedInput.value = "";
+    document.getElementById("inConversation").hidden = false;
+    if (nameBeforeConversation != null && namesInConversation.length == 1)
+      sendMessage({
+        nameTo: nameBeforeConversation,
+        nameFrom: name,
+        message: 'want names in conversation'});
+    document.getElementById("conversationNamesDiv").hidden = true;
   } else {
     sendConversationMessageInput.disabled = true;
   }
@@ -467,37 +496,58 @@ socket.on('message', function (message){
 	    document.getElementById("addNameError3").hidden = true;
       document.getElementById("addNameError5").hidden = true;
 	    document.getElementById("addNameError4").hidden = false;
+      namesInConversation.pop();
     } else if (message.inConversation == 'false')
-      if (numberConversation == 1)
+      if (numberConversation == 1) {
         startSendingConversationSession();
+      }
       else {
         dataConversation = {
           newNameAdded: 'true',
+          newName: nameAdded,
           number: (numberConversation+1),
           counter: numberConversation};
         sendConversationData();
         startSendingConversationSession();
       }
   } 
+  else if (message.message == 'want names in conversation') {
+    sendMessage({
+      nameTo: message.nameFrom,
+      nameFrom: name,
+      names: namesInConversation,
+      message: 'names in conversation'});
+  }
+  else if (message.message == 'names in conversation') {
+    namesInConversation = message.names;
+
+  }
   else if (message.message == 'want to add to conversation') {
   // See README (II.C) to understand that all the condition are their to make sure
   // that the adding operacion process is made well
-      if (numberConversation <= message.numberNames) {
-        numberConversation = message.numberNames;
-      }
-      if (message.nameToConnect == null) {
-        // verify the case first add
-        if (numberConversation == 1) {
-          nameAdded = message.nameFrom;
-          startSendingConversationSession();
-        }
-        nameBeforeConversation = message.nameFrom;
-        startReceivingConversationSession();
-    } else {
-        nameAdded = message.nameToConnect;
+    if (numberConversation <= message.numberNames) {
+      numberConversation = message.numberNames;
+    }
+    if (message.nameToConnect == null) {
+      // verify the case first add, must be to avoid a loop for the first add
+      // if I am the first name addded I will start a sendingSession with message.nameFrom
+      if (numberConversation == 1) {
+        nameAdded = message.nameFrom;
+        namesInConversation.push(nameAdded);
         startSendingConversationSession();
-        nameBeforeConversation = message.nameFrom;
-        startReceivingConversationSession();
+      }
+      // In all case I will start the receivingSession, the test is only to avoid the name which has
+      // initiate the first add to restart a sending session (if he does it, it will be a loop)
+      nameBeforeConversation = message.nameFrom;
+      startReceivingConversationSession();
+    } 
+    // again here we avoid a loop in the insertion of a new name, only the new name (nameToConnect == nameNextConversation != null)
+    // has to start the sendingSession (the name already in the conversation will receive a message with nameToConnect = nameNextConversation == null)
+    else if (message.nameToConnect != null) {
+      nameAdded = message.nameToConnect;
+      startSendingConversationSession();
+      nameBeforeConversation = message.nameFrom;
+      startReceivingConversationSession();
     }
   }
   else if (message.message == 'ready for conversation') {
@@ -519,8 +569,9 @@ socket.on('message', function (message){
   else if (message.type === 'answer') {
   	if (message.conversation === 'false')
     	pcSend.setRemoteDescription(new RTCSessionDescription(message.message));
-    else if (message.conversation === 'true')
-    	pcConversationSend.setRemoteDescription(new RTCSessionDescription(message.message));
+    else if (message.conversation === 'true') {
+      pcConversationSend.setRemoteDescription(new RTCSessionDescription(message.message));
+    }
   } 
   else if (message.type === 'candidate') {
     var candidate = new RTCIceCandidate({
@@ -674,7 +725,6 @@ function handleSendChannelStateChange() {
     messageToSend.focus();
     messageToSend.value = "";
     sendButton.disabled = false;
-    numberConversation
   } else {
     messageToSend.disabled = true;
     sendButton.disabled = true;

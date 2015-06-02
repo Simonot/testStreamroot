@@ -61,6 +61,10 @@ io.sockets.on('connection', function (socket){
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.message === 'ready for conversation') {
 			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'want names in conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'names in conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'offer') {
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'answer') {
