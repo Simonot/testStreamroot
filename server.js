@@ -40,10 +40,12 @@ io.sockets.on('connection', function (socket){
 	socket.on('banned client', function(nameBanned) {
 		log_comment('name banned ' + nameBanned);
 		nameClientSockets[nameBanned].emit('you have been banned');
+	});
+
+	socket.on('I am banned', function(nameBanned) {
 		nameClientSockets[nameBanned].disconnect();
 		nameList.splice(nameList.indexOf(nameBanned), 1);
 		socket.broadcast.emit('name list', nameList);
-		socket.emit('name list', nameList);
 	});
 
 	socket.on('message', function (message) {
@@ -64,6 +66,10 @@ io.sockets.on('connection', function (socket){
 		} else if (message.message === 'want names in conversation') {
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.message === 'names in conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'leaving the conversation') {
+			nameClientSockets[message.nameTo].emit('message', message);
+		} else if (message.message === 'you can leave') {
 			nameClientSockets[message.nameTo].emit('message', message);
 		} else if (message.type === 'offer') {
 			nameClientSockets[message.nameTo].emit('message', message);

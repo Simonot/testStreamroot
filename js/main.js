@@ -10,6 +10,7 @@ var name = null;
 var nameSender;
 var nameToSend;
 var nameList = [];
+var banned;
 // var for the conversation use, see README(II.C)
 var pcConversationSend = null;
 var pcConversationReceive = null;
@@ -17,11 +18,10 @@ var numberConversation = 1;
 var sendChannel_Conversation;
 var receiveChannel_Conversation;
 var nameNextConversation = null;
-var nameBeforeConversation;
+var nameBeforeConversation = null;
 var dataConversation;
 var isConversationSender = false;
 var namesInConversation = [];
-var numberDivNamesConversation = 0;
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
@@ -134,7 +134,7 @@ function banName() {
 		document.getElementById("nameBannedYes").hidden = false;
 		trace(nameBanned);
 		socket.emit('banned client', nameBanned);
-		nameList = nameList.splice(nameList.indexOf(nameBanned), 1);
+		nameList.splice(nameList.indexOf(nameBanned), 1);
 		//following part just in case the name had been searched just before banned
 		nameSerachedInput.value = "";
 		document.getElementById("nameSearchedYes").hidden = true;
@@ -147,21 +147,33 @@ function banName() {
 	}
 }
 
+function banProcedure() {
+  nameList = [];
+  if (pcReceive != null) {
+    receiveChannel.close()
+    receiveChannel = null;
+    pcReceive.close();
+    pcReceive = null;
+  }
+  if (pcSend != null) {
+    sendChannel.close();
+    pcSend.close();
+    pcSend = null;
+  }
+  document.getElementById("contenairsDiv").hidden = true;
+  document.getElementById("bannedDiv").hidden = false;
+  socket.emit('I am banned', name);
+  socket.disconnect();
+}
+
 socket.on('you have been banned', function() {
-	nameList = [];
-	if (pcReceive != null) {
-		receiveChannel.close()
-		receiveChannel = null;
-		pcReceive.close();
-		pcReceive = null;
-	}
-	if (pcSend != null) {
-		sendChannel.close();
-		pcSend.close();
-		pcSend = null;
-	}
-	document.getElementById("contenairsDiv").hidden = true;
-	document.getElementById("bannedDiv").hidden = false;
+  if (numberConversation > 1) {
+    trace('start ban');
+    banned = true;
+    leaveConversation();
+  }
+  else
+    banProcedure();
 });
 
 //////////////////////////////////////
@@ -171,17 +183,25 @@ var sendConversationMessageInput = document.getElementById("sendConversationMess
 var addNameButton = document.getElementById("addNameButton");
 var sendConversationButton = document.getElementById("sendConversationButton");
 var namesInButton = document.getElementById("namesInButton");
+var leaveConversationButton = document.getElementById("leaveConversationButton");
 document.getElementById("inConversation").hidden = true;
 nameAddedInput.value = "";
 sendConversationMessageInput.value = "";
-sendConversationMessageInput.value = "add first";
+sendConversationMessageInput.value = "Press Add first";
 sendConversationMessageInput.disabled = true;
 namesInButton.disabled = true;
+leaveConversationButton.disabled = true;
 addNameButton.disabled = false;
 addNameButton.onclick = verifyNameAdded;
 sendConversationButton.onclick = makeItSenderAndSend;
 namesInButton.onclick = displayNamesConversation;
+leaveConversationButton.onclick = leaveConversation;
 
+document.getElementById("inConversation").hidden = true;
+sendConversationMessageInput.value = "Press Add first";
+sendConversationMessageInput.disabled = true;
+namesInButton.disabled = true;
+leaveConversationButton.disabled = true;
 // initiate the 10 div contening the messages of the conversation
 var conversationMessageDiv, pseudoSpanConversation, messageSpanConversation;
 for(var i = 0; i < 10; i++) {
@@ -203,7 +223,6 @@ function verifyNameAdded() {
     document.getElementById("addNameError3").hidden = true;
     document.getElementById("addNameError4").hidden = true;
     document.getElementById("addNameError5").hidden = false;
-    addNameButton.disabled = true;
   } else {
     nameAdded = nameAddedInput.value;
     var test = nameList.inArray(nameAdded);
@@ -214,7 +233,7 @@ function verifyNameAdded() {
       document.getElementById("addNameError5").hidden = true;
       document.getElementById("addNameError").hidden = false;
       nameAddedInput.value = "";
-    } else if (nameAdded == name) {
+    } else if ((namesInConversation.inArray(nameAdded))) {
       document.getElementById("addNameError").hidden = true;
       document.getElementById("addNameError3").hidden = true;
       document.getElementById("addNameError4").hidden = true;
@@ -235,6 +254,85 @@ function verifyNameAdded() {
         message: 'are you in conversation'});
     }
   }
+}
+
+function makeItSenderAndSend() {
+  isConversationSender = true;
+  sendConversationData();
+}
+
+function displayConversationMessage(pseudo, message) {
+  // display the 10 last message of the conversation
+  var currentDiv = document.getElementById("conversationMessages").lastChild;
+  for(var i = 0; i < 9; i++) {
+    currentDiv = currentDiv.previousSibling;
+    currentDiv.nextSibling.firstChild.innerHTML = currentDiv.firstChild.innerHTML;
+    currentDiv.nextSibling.lastChild.innerHTML =  currentDiv.lastChild.innerHTML;
+    }
+
+  currentDiv.firstChild.innerHTML = pseudo;
+  currentDiv.lastChild.innerHTML = message;
+}
+
+function displayNamesConversation() {
+  trace(namesInConversation.length);
+  var conversationNames = document.getElementById("conversationNames");
+  conversationNames.removeChild(document.getElementById("conversationNamesDiv"));
+  
+  var conversationNamesDiv = document.createElement('div');
+  conversationNamesDiv.id = "conversationNamesDiv";
+  conversationNames.appendChild(conversationNamesDiv)
+  for(var i=0;  i < namesInConversation.length; i++) {
+    NameDiv = document.createElement('div');
+    NameDiv.innerHTML = '  - ' + namesInConversation[i];
+    document.getElementById("conversationNamesDiv").appendChild(NameDiv);
+  }
+}
+
+function leaveConversation() {
+  trace('leave conversation with number conversation' + numberConversation);
+  if (numberConversation == 2) {
+    sendMessage({
+    nameTo: nameNextConversation,
+    nameFrom: null,
+    message: 'leaving the conversation'});
+    leavingProcedure();
+  } else
+    sendMessage({
+      nameTo: nameNextConversation,
+      nameFrom: name,
+      message: 'leaving the conversation'});
+}
+
+function leavingProcedure() {
+  sendChannel_Conversation.close();
+  sendChannel_Conversation = null;
+  pcConversationSend.close();
+  pcConversationSend = null;
+  receiveChannel_Conversation.close();
+  receiveChannel_Conversation = null;
+  pcConversationReceive.close();
+  pcConversationReceive = null;
+  numberConversation = 1;
+  nameNextConversation = null;
+  nameBeforeConversation = null;
+  namesInConversation = [name];
+
+  document.getElementById("inConversation").hidden = true;
+  document.getElementById("conversationNamesDiv").hidden = true;
+  sendConversationMessageInput.value = "Press Add first";
+  sendConversationMessageInput.disabled = true;
+  namesInButton.disabled = true;
+  leaveConversationButton.disabled = true;
+
+  document.getElementById("addNameError").hidden = true;
+  document.getElementById("addNameError2").hidden = true;
+  document.getElementById("addNameError3").hidden = true;
+  document.getElementById("addNameError4").hidden = true;
+  document.getElementById("addNameError5").hidden = true;
+
+  if (banned)
+    banProcedure();
 }
 
 function startSendingConversationSession() {
@@ -299,15 +397,11 @@ function startReceivingConversationSession() {
   		message: 'ready for conversation'});
 }
 
-function makeItSenderAndSend() {
-  isConversationSender = true;
-  sendConversationData();
-}
-
 function sendConversationData() {
   if (isConversationSender) {
     dataConversation = {
       newNameAdded: 'false',
+      newNameLeaving: 'false',
       nameSender: name,
       counter: numberConversation,
       message: sendConversationMessageInput.value};
@@ -315,40 +409,26 @@ function sendConversationData() {
     sendConversationMessageInput.value = "";
   }
   if (dataConversation.newNameAdded == 'false')
-    displayConversationMessage(dataConversation.nameSender, dataConversation.message);
+    if (dataConversation.newNameLeaving == 'false')
+      displayConversationMessage(dataConversation.nameSender, dataConversation.message);
+    else //newNameLeaving == 'true'
+    {
+      namesInConversation.forEach(function(name, index) {
+      trace(name);
+      });
+      trace('deleting name leaving');
+      namesInConversation.splice(namesInConversation.indexOf(dataConversation.newName), 1);
+      namesInConversation.forEach(function(name, index) {
+      trace(name);
+      });
+      numberConversation = numberConversation - 1;
+      document.getElementById("conversationNamesDiv").hidden = true;
+    }  
   dataConversation.counter = dataConversation.counter - 1;
   if (dataConversation.counter != 0) {
     var data = JSON.stringify(dataConversation);
     sendChannel_Conversation.send(data);
     trace('Sent conversation data: ' + data);
-  }
-}
-
-function displayConversationMessage(pseudo, message) {
-  // display the 10 last message of the conversation
-  var currentDiv = document.getElementById("conversationMessages").lastChild;
-  for(var i = 0; i < 9; i++) {
-    currentDiv = currentDiv.previousSibling;
-    currentDiv.nextSibling.firstChild.innerHTML = currentDiv.firstChild.innerHTML;
-    currentDiv.nextSibling.lastChild.innerHTML =  currentDiv.lastChild.innerHTML;
-    }
-
-  currentDiv.firstChild.innerHTML = pseudo;
-  currentDiv.lastChild.innerHTML = message;
-}
-
-function displayNamesConversation() {
-  trace(namesInConversation.length);
-  var conversationNames = document.getElementById("conversationNames");
-  conversationNames.removeChild(document.getElementById("conversationNamesDiv"));
-  
-  var conversationNamesDiv = document.createElement('div');
-  conversationNamesDiv.id = "conversationNamesDiv";
-  conversationNames.appendChild(conversationNamesDiv)
-  for(var i=0;  i < namesInConversation.length; i++) {
-    NameDiv = document.createElement('div');
-    NameDiv.innerHTML = '  - ' + namesInConversation[i];
-    document.getElementById("conversationNamesDiv").appendChild(NameDiv);
   }
 }
 
@@ -383,8 +463,6 @@ function setLocalAndSendMessage_ConversationReceive(sessionDescription) {
 function handleMessage_Conversation(event) {
   trace('Received message: ' + event.data);
   dataConversation = JSON.parse(event.data);
-  trace('data counter ' + dataConversation.counter);
-  trace('data message ' + dataConversation.message);
   if (dataConversation.newNameAdded == 'true') {
     numberConversation = dataConversation.number;
     document.getElementById("conversationNamesDiv").hidden = true;
@@ -400,6 +478,7 @@ function handleSendChannelStateChange_Conversation() {
   if (readyState == "open") {
     sendConversationMessageInput.disabled = false;
     namesInButton.disabled = false;
+    leaveConversationButton.disabled = false;
     sendConversationMessageInput.focus();
     sendConversationMessageInput.value = "";
     nameAddedInput.value = "";
@@ -504,6 +583,7 @@ socket.on('message', function (message){
       else {
         dataConversation = {
           newNameAdded: 'true',
+          newNameLeaving: 'false',
           newName: nameAdded,
           number: (numberConversation+1),
           counter: numberConversation};
@@ -520,7 +600,6 @@ socket.on('message', function (message){
   }
   else if (message.message == 'names in conversation') {
     namesInConversation = message.names;
-
   }
   else if (message.message == 'want to add to conversation') {
   // See README (II.C) to understand that all the condition are their to make sure
@@ -554,6 +633,35 @@ socket.on('message', function (message){
    	nameNextConversation = message.nameFrom;
    	console.log('Sending offer to peer');
    	pcConversationSend.createOffer(setLocalAndSendMessage_ConversationSend, handleCreateOfferError);
+  }
+  else if (message.message == 'leaving the conversation') {
+    if (message.nameFrom == null) {
+      leavingProcedure();
+    } else if (message.nameFrom == nameBeforeConversation) {
+      dataConversation = {
+          newNameAdded: 'false',
+          newNameLeaving: 'true',
+          newName: message.nameFrom,
+          counter: (numberConversation-1)};
+      sendConversationData();
+      sendMessage({
+        nameTo: message.nameFrom,
+        nameFrom: name,
+        message: 'you can leave'});
+    } else if (message.nameFrom == nameNextConversation) {
+      nameNextConversation = null;
+      nameAdded = message.nameToConnect;
+      numberConversation = numberConversation - 1;
+      startSendingConversationSession();
+    }
+  }
+  else if (message.message == 'you can leave') {
+    sendMessage({
+        nameTo: nameBeforeConversation,
+        nameFrom: name,
+        nameToConnect: nameNextConversation,
+        message: 'leaving the conversation'});
+    leavingProcedure();
   }
   else if (message.type === 'offer') {
   	if (message.conversation === 'false') {
