@@ -11,6 +11,7 @@ var nameSender;
 var nameToSend;
 var nameList = [];
 var banned;
+var isSetName = false;
 // var for the conversation use, see README(II.C)
 var pcConversationSend = null;
 var pcConversationReceive = null;
@@ -83,6 +84,7 @@ function nameClientAdd() {
 		nameList.push(name);
 		socket.emit('new client connected', name);
     namesInConversation.push(name);
+    isSetName = true;
 	}
 }
 
@@ -95,26 +97,28 @@ socket.on('new client connected', function(name) {
 });
 
 window.onbeforeunload = function(e) {
-  if (!banned) {
-    if (numberConversation > 1)
-      leaveConversation();
-    socket.emit('client disconnected', name);
-  }
-  if (pcSend != null) {
-    sendChannel.close();
-    sendChannel = null;
-    pcSend.close();
-    pcSend = null;
-  }
-  if (pcReceive != null) {
-    sendMessage({
-      nameTo: nameSender,
-      nameFrom: name,
-      message: 'bye sender'})
-    receiveChannel.close();
-    receiveChannel = null;
-    pcReceive.close();
-    pcReceive = null;
+  if (isSetName) {
+    if (!banned) {
+      if (numberConversation > 1)
+        leaveConversation();
+      socket.emit('client disconnected', name);
+    }
+    if (pcSend != null) {
+      sendChannel.close();
+      sendChannel = null;
+      pcSend.close();
+      pcSend = null;
+    }
+    if (pcReceive != null) {
+      sendMessage({
+        nameTo: nameSender,
+        nameFrom: name,
+        message: 'bye sender'})
+      receiveChannel.close();
+      receiveChannel = null;
+      pcReceive.close();
+      pcReceive = null;
+    }
   }
 }
 
@@ -352,11 +356,11 @@ socket.on('message', function (message) {
   else if (message.type === 'offer') {
     if (message.conversation === 'false') {
       pcReceive.setRemoteDescription(new RTCSessionDescription(message.message));
-      console.log('Sending answer to peer');
+      trace('Sending answer to peer');
       pcReceive.createAnswer(setLocalAndSendMessage_Receive, handleCreateAnswerError);
     } else if (message.conversation === 'true') {
       pcConversationReceive.setRemoteDescription(new RTCSessionDescription(message.message));
-      console.log('Sending answer to peer');
+      trace('Sending answer to peer');
       pcConversationReceive.createAnswer(setLocalAndSendMessage_ConversationReceive, handleCreateAnswerError);
     }
   } 
@@ -455,7 +459,8 @@ function startSendingSession() {
 		pcSend = null;
 	}
 	try {
-    	pcSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+      pcSend = new RTCPeerConnection(null, {optional: []});
+    	//pcSend = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
     	pcSend.onicecandidate = handleIceCandidate_Send;
     	trace('Created RTCPeerConnection');
   		try {
@@ -489,7 +494,8 @@ function startReceivingSession() {
 		pcReceive = null;
 	}
 	try {
-    	pcReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
+      pcReceive = new RTCPeerConnection(null, {optional: []});
+    	//pcReceive = new RTCPeerConnection(null, {optional: [{RtpDataChannels: true}]});
     	pcReceive.onicecandidate = handleIceCandidate_Receive;
   		pcReceive.ondatachannel = gotReceiveChannel;
   		trace('Created RTCPeerConnection');
@@ -515,7 +521,9 @@ function sendMessageData() {
 function gotReceiveChannel(event) {
   trace('Receive Channel Callback');
   receiveChannel = event.channel;
-  receiveChannel.onmessage = handleData;
+  receiveChannel.onmessage = (webrtcDetectedBrowser == 'firefox') ? 
+        handleDataFirefox :
+        handleDataChrome;
   receiveChannel.onopen = handleReceiveChannelStateChange;
   receiveChannel.onclose = handleReceiveChannelStateChange;
 }
@@ -540,8 +548,39 @@ function setLocalAndSendMessage_Receive(sessionDescription) {
   	message: sessionDescription});
 }
 
+var buffer, counter;
+function handleDataChrome() {
+
+  var data = event.data;
+  trace('Received message: ' + data);
+  // test to know if we are receviing the blob object for the image or just a JSON data
+  if (typeof data === 'string') {
+    data = JSON.parse(data);
+    if (data.type === 'message') {
+      document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
+      messageReceived.value = data.message;
+    } else if (data.type === 'imageLength') {
+      buffer = window.buffer = new Uint8ClampedArray(data.message);
+      counter = 0;
+      trace('Expecting a total of ' + buffer.byteLength + ' bytes');
+    }
+  } else {
+    var payload = new Uint8ClampedArray(data);
+    buffer.set(payload, counter);
+
+    counter += payload.byteLength;
+    trace('counter: ' + counter);
+
+    if (counter == buffer.byteLength) {
+      // we're done: all data chunks have been received
+      trace('Done. Rendering image.');
+      renderImage(buffer);
+    }
+  }
+}
+
 var total, count, parts;
-function handleData(event) {
+function handleDataFirefox(event) {
   var data = event.data;
   trace('Received message: ' + data);
   // test to know if we are receviing the blob object for the image or just a JSON data
@@ -577,7 +616,7 @@ function handleData(event) {
               compose(i + 1, pos + this.result.byteLength);
             }
         };
-        
+
         reader.readAsArrayBuffer(parts[i]);
       }
 
@@ -608,8 +647,8 @@ function handleSendChannelStateChange() {
 }
 
 function handleReceiveChannelStateChange() {
-  var readyState = receiveChannel.readyState;
-  trace('Receive channel state is: ' + readyState);
+  //var readyState = receiveChannel.readyState;
+  //trace('Receive channel state is: ' + readyState);
 }
 
 function handleCreateOfferError(event){
@@ -975,8 +1014,8 @@ function handleSendChannelStateChange_Conversation() {
 }
 
 function handleReceiveChannelStateChange_Conversation() {
-  var readyState = receiveChannel_Conversation.readyState;
-  trace('Receive conversation channel state is: ' + readyState);
+  //var readyState = receiveChannel_Conversation.readyState;
+  //trace('Receive conversation channel state is: ' + readyState);
 }
 
 function handleIceCandidate_ConversationSend(event) {
@@ -1079,6 +1118,8 @@ function sendImageData() {
     trace('Sent : reminder bytes');
     sendChannel.send(image.data.subarray(n * CHUNK_LEN));
   }
+
+  sendMessageButton.disabled = false;
 }
 
 function renderImage(data) {

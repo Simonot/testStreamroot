@@ -34,6 +34,7 @@ io.sockets.on('connection', function (socket){
 	});
 
 	socket.on('client disconnected', function(name) {
+		log_comment('name disconnected ' +name);
 		nameList.splice(nameList.indexOf(name), 1);
 		socket.broadcast.emit('name list', nameList);
 	});
