@@ -22,8 +22,6 @@ var nameBeforeConversation = null;
 var dataConversation;
 var isConversationSender = false;
 var namesInConversation = [];
-// var sending image, see README(II.D)
-var image;
 
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
@@ -121,10 +119,14 @@ window.onbeforeunload = function(e) {
 }
 
 socket.on('bye sender', function() {
-  messageToSend.value = "Name has been banned or has disconnected, press Start again.";
+  messageToSend.value = "Name receiving has disconnected or been banned, press Start again.";
   nameToSendInput.value = "";
   messageToSend.disabled = true;
   sendMessageButton.disabled = true;
+  imageInput.disabled = true;
+  sendImageButton.disabled = true;
+  document.getElementById("messageManagement").setAttribute("class","management notStarted");
+  document.getElementById("imageManagement").setAttribute("class","management notStarted");
 });
 
 //////////////////////////////////////
@@ -221,13 +223,13 @@ if (location.hostname != "localhost") {
 }
 
 // utility function to follow exange of messaging with the server
-function sendMessage(message){
+function sendMessage(message) {
   console.log('Client sending message: ', message);
     socket.emit('message', message);
 }
 
-// again, be sure to have red README (II.B) to understand to normal stack exange of messages
-socket.on('message', function (message){
+// again, be sure to have red README (II.B.C) to understand the stacks for exanging messages
+socket.on('message', function (message) {
   console.log('Client received message:', message);
   if (message.message == 'want to send message') {
       nameSender = message.nameFrom;
@@ -420,8 +422,13 @@ var nameToSendInput = document.getElementById("nameToSend");
 var startSendSession = document.getElementById("startSendSession");
 var sendMessageButton = document.getElementById("sendMessageButton");
 var messageToSend = document.getElementById("messageToSend");
-messageToSend.value = "Press Start Sending, enter some text, then press Send.";
+var messageReceived = document.getElementById("messageReceived");
+document.getElementById("messageManagement").setAttribute("class","management notStarted");
+document.getElementById("imageManagement").setAttribute("class","management notStarted");
+messageToSend.value = "";
+messageToSend.value = "";
 nameToSendInput.value = "";
+messageReceived.value = "";
 messageToSend.disabled = true;
 sendMessageButton.disabled = true;
 startSendSession.onclick = startSendingSession;
@@ -508,7 +515,7 @@ function sendMessageData() {
 function gotReceiveChannel(event) {
   trace('Receive Channel Callback');
   receiveChannel = event.channel;
-  receiveChannel.onmessage = handleMessage;
+  receiveChannel.onmessage = handleData;
   receiveChannel.onopen = handleReceiveChannelStateChange;
   receiveChannel.onclose = handleReceiveChannelStateChange;
 }
@@ -533,45 +540,47 @@ function setLocalAndSendMessage_Receive(sessionDescription) {
   	message: sessionDescription});
 }
 
-function handleMessage(event) {
-  trace('Received message: ' + event.data);
-  document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
-  document.getElementById("messageReceived").value = event.data;
-}
+var total, count, parts;
+function handleData(event) {
+  var data = event.data;
+  trace('Received message: ' + data);
+  // test to know if we are receviing the blob object for the image or just a JSON data
+  if (typeof data === 'string') {
+    data = JSON.parse(data);
+    if (data.type === 'message') {
+      document.getElementById("messsageReceivedFrom").innerHTML = nameSender;
+      messageReceived.value = data.message;
+    } else if (data.type === 'imageLength') {
+      total = data.message;
+      parts = [];
+      count = 0;
+      console.log('Expecting a total of ' + total + ' bytes');
+    }
+  } else {
+    parts.push(data);
+    count += data.size;
+    console.log('Got ' + data.size + ' byte(s), ' + (total - count) + ' to go.');
 
-/*function handleImage(event) {
-  var total, count, parts;
-  trace('Received message: ' + event.data);
-    if (typeof event.data === 'string') {
-            total = parseInt(event.data);
-            parts = [];
-            count = 0;
-            console.log('Expecting a total of ' + total + ' bytes');
-        } else {
-
-        parts.push(event.data);
-        count += event.data.size;
-        console.log('Got ' + event.data.size + ' byte(s), ' + (total - count) + ' to go.');
-
-        if (count == total) {
-            console.log('Assembling payload')
-            var buffer = new Uint8ClampedArray(total);
-            var compose = function(i, pos) {
-                var reader = new FileReader();
-                reader.onload = function() { 
-                    buffer.set(new Uint8ClampedArray(this.result), pos);
-                    if (i + 1 == parts.length) {
-                        console.log('Done. Rendering photo.');
-                        renderPhoto(buffer);
-                    } else {
-                        compose(i + 1, pos + this.result.byteLength);
-                    }
-                };
-                reader.readAsArrayBuffer(parts[i]);
+    if (count == total) {
+      console.log('Assembling payload')
+      var buffer = new Uint8ClampedArray(total);
+      var compose = function(i, pos) {
+        var reader = new FileReader();
+        reader.onload = function() { 
+            buffer.set(new Uint8ClampedArray(this.result), pos);
+            if (i + 1 == parts.length) {
+              console.log('Done. Rendering image.');
+              renderImage(buffer);
+            } else {
+              compose(i + 1, pos + this.result.byteLength);
             }
-            compose(0, 0);
-        }}
-}*/
+        };
+        reader.readAsArrayBuffer(parts[i]);
+      }
+      compose(0, 0);
+    }
+  }
+}
 
 function handleSendChannelStateChange() {
   var readyState = sendChannel.readyState;
@@ -582,10 +591,15 @@ function handleSendChannelStateChange() {
     messageToSend.value = "";
     sendMessageButton.disabled = false;
     imageInput.disabled = false;
+    document.getElementById("messageManagement").setAttribute("class","management started");
+    document.getElementById("imageManagement").setAttribute("class","management started");
   } else {
     messageToSend.disabled = true;
     sendMessageButton.disabled = true;
     imageInput.disabled = true;
+    sendImageButton.disabled = true;
+    document.getElementById("messageManagement").setAttribute("class","management notStarted");
+    document.getElementById("imageManagement").setAttribute("class","management notStarted");
   }
 }
 
@@ -996,11 +1010,11 @@ function handleIceCandidate_ConversationReceive(event) {
 //////////////////////////////////////
 // see README (II.D)
 
-var allowedImageTypes = ['png', 'jpg', 'gif'];
+var allowedImageTypes = ['png', 'jpg', 'jpeg', 'gif'];
 var imageInput = document.getElementById('imageInput');
 var sendImageButton = document.getElementById('sendImageButton');
-var canvas = document.getElementById('photo').getContext('2d');
-var canvasWidth = 200;
+var canvas = document.getElementById('imageCanvas').getContext('2d');
+var canvasWidth = 300;
 var canvasHeight = 150;
 sendImageButton.disabled = true;
 imageInput.disabled = true;
@@ -1013,8 +1027,8 @@ function verifyImageFile() {
   reader.onload = function() {
     document.getElementById('imageForCanvas').src = this.result;
   }
-  image = imageInput.files[0];
-  var imageType = image.name.split('.');
+  var imageFile = imageInput.files[0];
+  var imageType = imageFile.name.split('.');
   imageType = imageType[imageType.length - 1].toLowerCase();
   if(!allowedImageTypes.inArray(imageType)) {
     imageInput.value = "";
@@ -1023,7 +1037,7 @@ function verifyImageFile() {
   else {
     document.getElementById("imageTypeError").hidden = true;
     sendImageButton.disabled = false;
-    reader.readAsDataURL(image);
+    reader.readAsDataURL(imageFile);
   }
 }
 
@@ -1034,96 +1048,39 @@ function sendImageData() {
   // Split data channel message in chunks of this byte length.
   var CHUNK_LEN = 64000;
 
-  image = canvas.getImageData(0, 0, canvasWidth, canvasHeight);
+  var image = canvas.getImageData(0, 0, canvasWidth, canvasHeight);
   var length = image.data.byteLength;
   var n = length / CHUNK_LEN | 0;
 
   trace('Sending a total of ' + length + ' byte(s)');
   var data = {
-    type: 'image',
-    length: 'true',
+    type: 'imageLength',
     message: length};
   data = JSON.stringify(data)
   sendChannel.send(data);
-  //sendChannel.send(length);
-  //trace('Sent data: ' + data);
+  trace('Sent data: ' + data);
 
-  // split the photo and send in chunks of about 64KB
-    for (var i = 0; i < n; i++) {
-        var start = i * CHUNK_LEN,
-            end = (i+1) * CHUNK_LEN;
-        trace(start + ' - ' + (end-1));
-        var data = {
-          type: 'image',
-          length: 'false',
-          message: image.data.subarray(start, end)};
-        data = JSON.stringify(data)
-        sendChannel.send(data);
-        //sendChannel.send(image.data.subarray(start, end));
-        //trace('Sent data: ' + data);
-    }
+  // split the image and send in chunks of about 64KB
+  for (var i = 0; i < n; i++) {
+    var start = i * CHUNK_LEN;
+    var end = (i+1) * CHUNK_LEN;
+    trace(start + ' - ' + (end-1));
+    sendChannel.send(image.data.subarray(start, end));
+    trace('Sent : ' + CHUNK_LEN + ' bytes');
+  }
 
-    // send the reminder, if any
-    if (length % CHUNK_LEN) {
-        trace('last ' + length % CHUNK_LEN + ' byte(s)');
-        var data = {
-          type: 'image',
-          length: 'false',
-          message: image.data.subarray(n * CHUNK_LEN)};
-        data = JSON.stringify(data)
-        //sendChannel.send(image.data.subarray(n * CHUNK_LEN));
-        sendChannel.send(data);
-        //trace('Sent data: ' + data);
-    }
+  // send the reminder, if any
+  if (length % CHUNK_LEN) {
+    trace('Sent : reminder bytes');
+    sendChannel.send(image.data.subarray(n * CHUNK_LEN));
+  }
 }
 
-/*
-function receiveDataFirefoxFactory() {
-    var count, total, parts;
+function renderImage(data) {
+    var imageCanvas = document.getElementById('imageCanvas');
 
-    return function onmessage(event) {
-        if (typeof event.data === 'string') {
-            total = parseInt(event.data);
-            parts = [];
-            count = 0;
-            console.log('Expecting a total of ' + total + ' bytes');
-            return;
-        }
-
-        parts.push(event.data);
-        count += event.data.size;
-        console.log('Got ' + event.data.size + ' byte(s), ' + (total - count) + ' to go.');
-
-        if (count == total) {
-            console.log('Assembling payload')
-            var buf = new Uint8ClampedArray(total);
-            var compose = function(i, pos) {
-                var reader = new FileReader();
-                reader.onload = function() { 
-                    buf.set(new Uint8ClampedArray(this.result), pos);
-                    if (i + 1 == parts.length) {
-                        console.log('Done. Rendering photo.');
-                        renderPhoto(buf);
-                    } else {
-                        compose(i + 1, pos + this.result.byteLength);
-                    }
-                };
-                reader.readAsArrayBuffer(parts[i]);
-            }
-            compose(0, 0);
-        }
-    }
-}
-
-var img = canvas.getImageData(0, 0, canvasWidth, canvasHeight),
-        len = img.data.byteLength,
-        n = len / CHUNK_LEN | 0;
-*/
-function renderPhoto(data) {
-    var photo = document.getElementById('photo')
-
-    var canvas = photo.getContext('2d');
-    img = canvas.createImageData(300, 150);
-    img.data.set(data);
-    canvas.putImageData(img, 0, 0);
+    var canvas = imageCanvas.getContext('2d');
+    var image = canvas.createImageData(300, 150);
+    image.data.set(data);
+    canvas.putImageData(image, 0, 0);
 }

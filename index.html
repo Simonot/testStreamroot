@@ -5,8 +5,8 @@
 		<style type="text/css">
    			.contenair {
    				float: left;
-  				height: 500px;
-  				width: 240px;
+  				height: 550px;
+  				width: 250px;
   				border-style: solid;
   				border-width: medium;
   				padding: 5px;
@@ -36,6 +36,20 @@
             {
                 margin-left: 5px;
             }
+            .management
+            {
+                border: 1px solid #ccc;
+                padding: 2px;
+                margin: 2px;
+            }
+            .notStarted
+            {
+            	color: #ccc;
+            }
+            .started
+            {
+            	color: #000;
+            }
   		</style>
 	</head>
 
@@ -60,24 +74,26 @@
 			</div>
 			<div id="sendContenair" class="contenair">
 
-				Send data to : <input type="text" id="nameToSend"></input></br>
-				<span id="nameToSendError1" class="textError" hidden> Please chose a name (diferent than yours :))</br></span>
+				Send data to :</br>
+				<input type="text" id="nameToSend"></input><button id="startSendSession" disabled>Start</button></br> 
+				<span id="nameToSendError1" class="textError" hidden> Please chose a name (different than yours :))</br></span>
 				<span id="nameToSendError2" class="textError" hidden> Please chose a name wich is connected (try use "search name" :))</br></span>
-				<button id="startSendSession" disabled>Start Sending</button></br> 
-				<div id="messageManagement">
+				<div id="messageManagement" class= "management">
+					Tape a message here and then Send !
 					<textarea id="messageToSend" disabled></textarea></br>
     				<button id="sendMessageButton" disabled>Send</button>
   					</br></br>
 					Last message (received from   <span id="messsageReceivedFrom">...</span>)</br>
 					<textarea id="messageReceived" disabled></textarea></br></br>
 				</div>
-				<div id="imageManagement">
-					Chose an image to send :<input id="imageInput" type="file" disabled></input></br>
-					<span id="imageTypeError" class="textError" hidden> The image selected is not jpg, png or gif</br></span>
+				<div id="imageManagement" class= "management notStarted">
+					Chose an image and then Send !</br>
+					<input id="imageInput" type="file" disabled></input></br>
+					<span id="imageTypeError" class="textError" hidden> The image selected is not jpg, jpeg, png or gif</br></span>
 					<button id="sendImageButton" disabled>Send</button>
   					</br></br>
   					<img id="imageForCanvas" hidden/>
-  					<canvas id="photo" style="width: 200px; height: 150px; border: 1px solid #ccc;"></canvas>
+  					<canvas id="imageCanvas" style="width: 200px; height: 150px; border: 1px solid #ccc;"></canvas>
   				</div>
 
 
