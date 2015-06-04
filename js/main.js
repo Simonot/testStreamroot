@@ -564,8 +564,10 @@ function handleData(event) {
     if (count == total) {
       console.log('Assembling payload')
       var buffer = new Uint8ClampedArray(total);
+
       var compose = function(i, pos) {
         var reader = new FileReader();
+
         reader.onload = function() { 
             buffer.set(new Uint8ClampedArray(this.result), pos);
             if (i + 1 == parts.length) {
@@ -575,8 +577,10 @@ function handleData(event) {
               compose(i + 1, pos + this.result.byteLength);
             }
         };
+        
         reader.readAsArrayBuffer(parts[i]);
       }
+
       compose(0, 0);
     }
   }
@@ -678,7 +682,7 @@ namesInButton.disabled = true;
 leaveConversationButton.disabled = true;
 // initiate the 10 div contening the messages of the conversation
 var conversationMessageDiv, pseudoSpanConversation, messageSpanConversation;
-for(var i = 0; i < 10; i++) {
+for(var i = 0; i < 12; i++) {
   conversationMessageDiv = document.createElement('div');
   pseudoSpanConversation = document.createElement('span');
   messageSpanConversation = document.createElement('span');
@@ -738,7 +742,7 @@ function makeItSenderAndSend() {
 function displayConversationMessage(pseudo, message) {
   // display the 10 last message of the conversation
   var currentDiv = document.getElementById("conversationMessages").lastChild;
-  for(var i = 0; i < 9; i++) {
+  for(var i = 0; i < 11; i++) {
     currentDiv = currentDiv.previousSibling;
     currentDiv.nextSibling.firstChild.innerHTML = currentDiv.firstChild.innerHTML;
     currentDiv.nextSibling.lastChild.innerHTML =  currentDiv.lastChild.innerHTML;
@@ -1009,6 +1013,7 @@ function handleIceCandidate_ConversationReceive(event) {
 
 //////////////////////////////////////
 // see README (II.D)
+// sending image with DataChannel option
 
 var allowedImageTypes = ['png', 'jpg', 'jpeg', 'gif'];
 var imageInput = document.getElementById('imageInput');

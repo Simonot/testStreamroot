@@ -70,5 +70,9 @@ II. Rest of the app :
 		- Send message is easy with our organisation, we simply use a counter initiate with the number of the names in the conversation
 		
 			
-	D) Sending Image/Video to the other peer :
-		TODO
+	D) Sending Image to the other peer :
+		- We can here use to two RTCPeerConnection pcSend and pcReceive to send an image instead of a message
+		- We first verify that the file selected is an image file with verifyImageFile
+		- sending and receiving the file is classic. We divide the image in CHUNKS of 64Kb we send it one by one and we reassemble all the CHUNKS in the receiver's side
+		
+For any question do not hesitate to contact me in GitHub, I will be happy to answer you ! 
