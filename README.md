@@ -67,8 +67,17 @@ II. Rest of the app :
 			during all the exchange of messages we manage to keep this list update
 			=> when we had a new member we notify this name to the other members of the conversation (dataConversation.newNameAdded == 'true')
 			+  the new name added ask for the list of the name currently in the conversation
-		- Send message is easy with our organisation, we simply use a counter initiate with the number of the names in the conversation
+		- Send message is easy with our architecture, we simply use a counter initiate with the number of the names in the conversation
+		- Leaving the conversation. Not very difficult with our architecture.
+		=> the name who want to leave send a message 'leaving the conversation' to the nameNextConversation
+		=> the nameNextConversation inform everybody that the leaving name is leaving and close and send him 'you can leave'
+		=> the leaving name inform the nameBeforeConversation that he is leaving and that he have to connect with the nameNextConversation
+		=> the leaving name leaves with the leavingProcedure()
+		=> the nameBeforeConversation connect himself with the nameNextConversation of the old member of the conversation
 		
+		! Notice that there is a compatibility problem with Chrome/Firefix for the conversation option. I could not understand the source of the probleme but when you try to add a Chrome 
+		  name starting from a Firefox name, after sending the offer, the Chrome name will have an error when calling createAnswer : CreateAnswer can't be called before SetRemoteDescription.
+		  Except that all works. Please do not hesitate to contact me in GitHub if you find the problem !
 			
 	D) Sending Image to the other peer :
 		- We can here use to two RTCPeerConnection pcSend and pcReceive to send an image instead of a message
