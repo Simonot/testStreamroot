@@ -396,12 +396,10 @@ socket.on('message', function (message) {
   }
 });
 
-var counterUrl = 0;
 function requestTurn(turn_url) {
   var turnExists = false;
-  for (var i in pc_config.iceServers) {
+  for (var i = 0; i < pc_config.iceServers.length; i++) {
     trace('i :' + i);
-    trace('counterUrl :' + counterUrl);
     trace('pc_config.iceServers[i].url :' + pc_config.iceServers[i].url);
     counterUrl = counterUrl + 1
     if (pc_config.iceServers[i].url.substr(0, 5) === 'turn:') {
