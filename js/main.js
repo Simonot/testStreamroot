@@ -401,7 +401,6 @@ function requestTurn(turn_url) {
   for (var i = 0; i < pc_config.iceServers.length; i++) {
     trace('i :' + i);
     trace('pc_config.iceServers[i].url :' + pc_config.iceServers[i].url);
-    counterUrl = counterUrl + 1
     if (pc_config.iceServers[i].url.substr(0, 5) === 'turn:') {
       turnExists = true;
       turnReady = true;
