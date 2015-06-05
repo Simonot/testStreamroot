@@ -24,12 +24,16 @@ var dataConversation;
 var isConversationSender = false;
 var namesInConversation = [];
 
-var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
+var test = {'url': 'stun:stun.l.google.com:19302'};
+trace('test :' + test);
+trace('test.url :' + test.url);
+//var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
+var pc_config = {'iceServers': [test]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
 
 trace('pc_config.iceServers :' + pc_config.iceServers);
-trace('pc_config.iceServers[1] :' + pc_config.iceServers[1]);
-trace('pc_config.iceServers[1].url :' + pc_config.iceServers[1].url);
+trace('pc_config.iceServers[0] :' + pc_config.iceServers[0]);
+trace('pc_config.iceServers[0].url :' + pc_config.iceServers[0].url);
 var socket = io.connect();
 //////////////////////////////////////
 // only an utility function
