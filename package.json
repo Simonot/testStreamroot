@@ -2,7 +2,7 @@
   "name": "testStreamroot",
   "version": "0.0.1",
   "description": "test Streamroot",
-  "main": "index.js",
+  "main": "server.js",
   "engines": {
     "node": "0.12.x",
 	"npm":  "2.5.x"
