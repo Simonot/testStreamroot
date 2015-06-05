@@ -27,6 +27,8 @@ var namesInConversation = [];
 var pc_config = {'iceServers': [{'url': 'stun:stun.l.google.com:19302'}]};
 var pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': true}]};
 
+trace('pc_config.iceServers[1]' + pc_config.iceServers[1]);
+trace('pc_config.iceServers[1].url' + pc_config.iceServers[1].url);
 var socket = io.connect();
 //////////////////////////////////////
 // only an utility function
